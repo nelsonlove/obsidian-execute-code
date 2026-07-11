@@ -34,7 +34,7 @@ export class Outputter extends EventEmitter {
 	app: App;
 	srcFile: string;
 
-	constructor(codeBlock: HTMLElement, settings: ExecutorSettings, view: MarkdownView, app: App, srcFile: string) {
+	constructor(codeBlock: HTMLElement, settings: ExecutorSettings, view: MarkdownView, app: App, srcFile: string, srcCode: string, getSectionInfo: (() => { lineStart: number, lineEnd: number } | null) | null) {
 		super();
 		this.settings = settings;
 		this.app = app;
@@ -47,7 +47,16 @@ export class Outputter extends EventEmitter {
 		this.htmlBuffer = "";
 		this.blockRunState = "INITIAL";
 
-		this.saveToFile = new FileAppender(view, codeBlock.parentElement as HTMLPreElement);
+		this.saveToFile = new FileAppender(app, srcFile, srcCode, getSectionInfo);
+	}
+
+	/**
+	 * Writes the output buffered during this run into the note, if the
+	 * persistent output setting is enabled. Called when the block finishes.
+	 */
+	async flushPersistentOutput() {
+		if (this.settings.persistentOuput)
+			await this.saveToFile.flush();
 	}
 
 	/**

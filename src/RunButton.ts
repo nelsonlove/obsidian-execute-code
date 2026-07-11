@@ -1,4 +1,4 @@
-import { App, Workspace, MarkdownView } from 'obsidian';
+import { App, Workspace, MarkdownView, MarkdownPostProcessorContext } from 'obsidian';
 import ExecutorContainer from './ExecutorContainer';
 import { LanguageId, PluginContext, supportedLanguages } from './main';
 import { Outputter } from './output/Outputter';
@@ -108,9 +108,9 @@ export function addInOpenFiles(plugin: PluginContext) {
  * @param view The current markdown view
  * @param plugin Contains context needed for execution.
 */
-export function addToAllCodeBlocks(element: HTMLElement, file: string, view: MarkdownView, plugin: PluginContext) {
+export function addToAllCodeBlocks(element: HTMLElement, file: string, view: MarkdownView, plugin: PluginContext, ctx?: MarkdownPostProcessorContext) {
     Array.from(element.getElementsByTagName("code"))
-        .forEach((codeBlock: HTMLElement) => addToCodeBlock(codeBlock, file, view, plugin));
+        .forEach((codeBlock: HTMLElement) => addToCodeBlock(codeBlock, file, view, plugin, ctx));
 }
 
 /**
@@ -120,7 +120,7 @@ export function addToAllCodeBlocks(element: HTMLElement, file: string, view: Mar
  * @param view The current markdown view
  * @param plugin Contains context needed for execution.
  */
-function addToCodeBlock(codeBlock: HTMLElement, file: string, view: MarkdownView, plugin: PluginContext) {
+function addToCodeBlock(codeBlock: HTMLElement, file: string, view: MarkdownView, plugin: PluginContext, ctx?: MarkdownPostProcessorContext) {
     if (codeBlock.className.match(/^language-\{\w+/i)) {
         codeBlock.className = codeBlock.className.replace(/^language-\{(\w+)/i, "language-$1 {");
         codeBlock.parentElement.className = codeBlock.className;
@@ -145,7 +145,9 @@ function addToCodeBlock(codeBlock: HTMLElement, file: string, view: MarkdownView
     const hasBlockBeenButtonifiedAlready = parent.classList.contains(codeBlockHasButtonClass);
     if (!isLanguageSupported || hasBlockBeenButtonifiedAlready) return;
 
-    const outputter = new Outputter(codeBlock, plugin.settings, view, plugin.app, file);
+    // Section info must be fetched lazily: line numbers shift as the note is edited
+    const getSectionInfo = ctx ? () => ctx.getSectionInfo(pre) : null;
+    const outputter = new Outputter(codeBlock, plugin.settings, view, plugin.app, file, srcCode, getSectionInfo);
     parent.classList.add(codeBlockHasButtonClass);
     const button = createButton();
     pre.appendChild(button);
@@ -205,5 +207,6 @@ function runCode(cmd: string, cmdArgs: string, ext: string, block: CodeBlockCont
             block.outputter.closeInput();
             block.outputter.finishBlock();
         }
+        block.outputter.flushPersistentOutput();
     });
 }
