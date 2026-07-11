@@ -4,6 +4,7 @@ import {ExecutorSettings} from "src/settings/Settings";
 import {getCodeBlockLanguage, getLanguageAlias, transformMagicCommands} from './TransformCode';
 import {getArgs} from "src/CodeBlockArgs";
 import {expandNoweb} from "./noweb";
+import {buildVarAssignments} from "./vars";
 import type {LanguageId} from "src/main";
 import type {CodeBlockArgs} from '../CodeBlockArgs';
 
@@ -70,12 +71,16 @@ export class CodeInjector {
 					injectedCode = `${globalInject}\n${injectedCode}`;
 			}
 		}
+		// Bind cross-block variables from saved results
+		const missingRefs = new Set<string>();
+		if (this.mainArgs.var)
+			injectedCode = buildVarAssignments(this.mainArgs.var, activeView.data, language, missingRefs) + injectedCode;
+
 		// Expand noweb <<label>> references against this note's labelled
 		// blocks of the same language
-		const missingRefs = new Set<string>();
 		injectedCode = expandNoweb(injectedCode, this.namedExports, missingRefs);
 		if (missingRefs.size)
-			new Notice(`Unknown noweb reference(s): ${[...missingRefs].join(", ")}`);
+			new Notice(`Execute Code: unresolved reference(s): ${[...missingRefs].join(", ")}`, 10000);
 
 		return transformMagicCommands(this.app, injectedCode);
 	}

@@ -9,6 +9,7 @@
 > - **[`{results="output"|"value"}`](#result-modes-common-lisp-sessions)** block arguments for session blocks
 > - **[Run code block under cursor](#run-the-code-block-under-the-cursor)** command (org-babel `C-c C-c` analog)
 > - **[Noweb references and tangling](#noweb-references-and-tangling-)** — `<<label>>` splicing at run and tangle time, plus a "Tangle code blocks in current note" command
+> - **Cross-block variables** — `{var={x="label"}}` binds a block's saved results to a variable, like org-babel's `:var` (lisp, python, js)
 > - Actionable error notices: the executable name and exit code instead of "Error!"
 > - Run button as a play icon beside the copy button; fixed a stuck load-spinner and compounding code injection on re-runs
 <div align='right'>
@@ -789,6 +790,20 @@ Blocks with a `tangle` argument can be exported to source files with the **Tangl
 `````
 
 For tangling, labels are shared across the whole note regardless of language; for running, references resolve against labelled blocks of the same language.
+
+### Cross-Block Variables
+
+`{var={x="label"}}` binds `x` to the **saved results** of the block labelled `label` (the `output` block directly below it, so run the producing block first). Results are bound as strings; because they're plain text, the producer can be written in a different language than the consumer. Supported for Lisp, Python, and JavaScript blocks:
+
+`````
+```lisp {label="answer", results="value"}
+(* 6 7)
+```
+
+```lisp {var={x="answer"}}
+(parse-integer x)
+```
+`````
 
 ### Ignoring Code Exports
 

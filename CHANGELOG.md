@@ -7,6 +7,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## Fork releases (nelsonlove/obsidian-execute-code)
 
+## [2.1.16] - 2026-07-11 (fork)
+### Added
+- Cross-block variables: `{var={x="label"}}` binds a block's saved results to a variable (lisp/python/js), like org-babel's `:var`
+- `{results="value"}` now also works for non-session (script mode) Lisp blocks
+
 ## [2.1.15] - 2026-07-11 (fork)
 ### Added
 - Noweb references: a line containing only `<<label>>` splices in the labelled block's code before running (recursive, indentation-preserving)

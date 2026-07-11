@@ -78,7 +78,15 @@ export async function handleExecution(block: CodeBlockContext) {
         case "octave": return runCode(s.octavePath, s.octaveArgs, s.octaveFileExtension, block, { shell: true, transform: (code) => macro.expandOctavePlot(code) });
         case "maxima": return runCode(s.maximaPath, s.maximaArgs, s.maximaFileExtension, block, { shell: true, transform: (code) => macro.expandMaximaPlot(code) });
         case "racket": return runCode(s.racketPath, s.racketArgs, s.racketFileExtension, block, { shell: true });
-        case "lisp": return runCode(s.lispPath, s.lispArgs, s.lispFileExtension, block, { shell: true });
+        case "lisp": return runCode(s.lispPath, s.lispArgs, s.lispFileExtension, block, {
+            shell: true,
+            // Session mode handles results="value" in the executor; in script
+            // mode, wrap the block to report the last form's values instead
+            // of stdout (org-babel's :results value)
+            transform: (block.args?.results === "value" && !s.lispInteractive)
+                ? (code) => `(let ((cl-user::vals (multiple-value-list (let ((*standard-output* (make-broadcast-stream))) ${code}\n)))) (dolist (cl-user::v cl-user::vals) (format t "~&~s~%" cl-user::v)))`
+                : undefined,
+        });
         case "applescript": return runCode(s.applescriptPath, s.applescriptArgs, s.applescriptFileExtension, block, { shell: true });
         case "zig": return runCode(s.zigPath, s.zigArgs, "zig", block, { shell: true });
         case "ocaml": return runCode(s.ocamlPath, s.ocamlArgs, "ocaml", block, { shell: true });
