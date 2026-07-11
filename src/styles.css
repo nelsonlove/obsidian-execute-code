@@ -55,7 +55,7 @@ button.run-code-button:hover {
 
 /* Shift the copy button left so the run button sits at the right edge */
 .has-run-code-button pre > button.copy-code-button {
-	right: calc(var(--size-2-2, 4px) + 38px);
+	right: calc(var(--size-2-2, 4px) + 46px);
 }
 
 button.clear-button {
