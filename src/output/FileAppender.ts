@@ -25,6 +25,10 @@ export default class FileAppender {
     }
 
     public clearOutput() {
+        // Called at the start of each run — re-arm the unsupported-block notice
+        // so it shows once per run, not once per rendered block.
+        this.notifiedUnsupported = false;
+
         if (this.codeBlockRange && this.outputPosition) {
 
             const editor = this.view.editor;
