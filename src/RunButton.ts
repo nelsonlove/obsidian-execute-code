@@ -37,7 +37,10 @@ async function handleExecution(block: CodeBlockContext) {
     const s: ExecutorSettings = block.outputter.settings;
 
     button.className = disabledClass;
-    block.srcCode = await new CodeInjector(app, s, language).injectCode(srcCode);
+    // Run against a copy of the block context: the context is shared between
+    // runs of the same rendered block, so writing the injected code back into
+    // it would compound pre/post/import injections on every re-run.
+    block = { ...block, srcCode: await new CodeInjector(app, s, language).injectCode(srcCode) };
 
     switch (language) {
         case "js": return runCode(s.nodePath, s.nodeArgs, s.jsFileExtension, block, { transform: (code) => macro.expandJS(code) });
