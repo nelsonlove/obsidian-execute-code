@@ -1,10 +1,11 @@
-import { EditorPosition, EditorRange, MarkdownView } from "obsidian";
+import { EditorPosition, EditorRange, MarkdownView, Notice } from "obsidian";
 
 export default class FileAppender {
     view: MarkdownView;
     codeBlockElement: HTMLPreElement
     codeBlockRange: EditorRange
     outputPosition: EditorPosition;
+    notifiedUnsupported = false;
 
     public constructor(view: MarkdownView, blockElem: HTMLPreElement) {
         this.view = view;
@@ -14,7 +15,7 @@ export default class FileAppender {
         try {
             this.codeBlockRange = this.getRangeOfCodeBlock(blockElem);
         } catch (e) {
-            console.error("Error finding code block range: Probably because of 'run-' prefix");
+            console.warn("Execute Code: couldn't locate this code block in the editor ('run-' blocks and live preview aren't supported) — persistent output will not be saved for it.");
             this.codeBlockRange = null
         }
     }
@@ -41,8 +42,13 @@ export default class FileAppender {
         try {
             this.findOutputTarget();
         } catch (e) {
-            console.error("Error finding output target: Probably because of 'run-' prefix");
-            this.view.setViewData(this.view.editor.getValue(), false);
+            // Persistent output can't locate the code block in the editor for
+            // 'run-' prefixed blocks and live preview. Notify once per run
+            // instead of logging on every chunk of output.
+            if (!this.notifiedUnsupported) {
+                this.notifiedUnsupported = true;
+                new Notice("Execute Code: persistent output isn't supported for this code block ('run-' blocks and live preview) — the output is only shown below the block, not saved to the note.", 10000);
+            }
             return;
         }
 
