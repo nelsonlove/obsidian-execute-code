@@ -53,10 +53,13 @@ export class Outputter extends EventEmitter {
 	/**
 	 * Writes the output buffered during this run into the note, if the
 	 * persistent output setting is enabled. Called when the block finishes.
+	 * When output was saved, the ephemeral on-screen output element is hidden —
+	 * the saved `output` block below the code block is the display.
 	 */
 	async flushPersistentOutput() {
-		if (this.settings.persistentOuput)
-			await this.saveToFile.flush();
+		if (!this.settings.persistentOuput) return;
+		if (await this.saveToFile.flush())
+			this.delete();
 	}
 
 	/**

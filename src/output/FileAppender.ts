@@ -56,16 +56,17 @@ export default class FileAppender {
      * Writes the buffered output into the note, replacing the code block's
      * previous `output` block if it has one. Called once, when the code block
      * finishes running.
+     * @returns whether output was written into the note
      */
-    public async flush() {
-        if (this.buffer === "") return;
+    public async flush(): Promise<boolean> {
+        if (this.buffer === "") return false;
         const output = this.buffer;
         this.buffer = "";
 
         const file = this.app.vault.getAbstractFileByPath(this.srcFile);
         if (!(file instanceof TFile)) {
             this.notifyUnsupported();
-            return;
+            return false;
         }
 
         let located = true;
@@ -85,10 +86,11 @@ export default class FileAppender {
                 const lineBreaks = existing[0].match(/^\n+/)[0];
                 return data.slice(0, blockEnd) + lineBreaks + outputBlock + data.slice(blockEnd + existing[0].length);
             }
-            return data.slice(0, blockEnd) + "\n" + outputBlock + data.slice(blockEnd);
+            return data.slice(0, blockEnd) + "\n\n" + outputBlock + data.slice(blockEnd);
         });
 
         if (!located) this.notifyUnsupported();
+        return located;
     }
 
     private notifyUnsupported() {
