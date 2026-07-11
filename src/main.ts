@@ -48,7 +48,7 @@ export default class ExecuteCodePlugin extends Plugin {
 		}
 		runButton.addInOpenFiles(context);
 		this.registerMarkdownPostProcessor((element, _context) => {
-			runButton.addToAllCodeBlocks(element, _context.sourcePath, this.app.workspace.getActiveViewOfType(MarkdownView), context);
+			runButton.addToAllCodeBlocks(element, _context.sourcePath, this.app.workspace.getActiveViewOfType(MarkdownView), context, _context);
 		});
 
 		// live preview renderers
