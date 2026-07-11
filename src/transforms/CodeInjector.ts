@@ -18,7 +18,7 @@ export class CodeInjector {
 	private appendSrcCode = "";
 	private namedImportSrcCode = "";
 
-	private mainArgs: CodeBlockArgs = {};
+	mainArgs: CodeBlockArgs = {};
 
 	private namedExports: Record<string, string> = {};
 

@@ -36,7 +36,7 @@ export default class RExecutor extends ReplExecutor {
 		//this.process.stdin.write("\n");
 	}
 	
-	wrapCode(code: string, finishSigil: string): string {		
+	wrapCode(code: string, finishSigil: string, _resultsMode?: "value" | "output"): string {		
 		return `tryCatch({
 			cat(sprintf("%s", 
 				eval(parse(text = ${JSON.stringify(code)} ))

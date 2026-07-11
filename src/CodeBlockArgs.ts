@@ -10,6 +10,7 @@ export type ExportType = "pre" | "post";
  */
 export interface CodeBlockArgs {
 	label?: string;
+	results?: "value" | "output";
 	import?: string | string[];
 	export?: ExportType | ExportType[];
 	ignore?: (ExportType | "global")[] | ExportType | "global" | "all";

@@ -22,7 +22,7 @@ export default class NodeJSExecutor extends ReplExecutor {
 		this.process.stdin.write("\n");
 	}
 
-	wrapCode(code: string, finishSigil: string): string {
+	wrapCode(code: string, finishSigil: string, _resultsMode?: "value" | "output"): string {
 		return `try { eval(${JSON.stringify(code)}); }` +
 			`catch(e) { console.error(e); }` +
 			`finally { process.stdout.write(${JSON.stringify(finishSigil)}); }` +

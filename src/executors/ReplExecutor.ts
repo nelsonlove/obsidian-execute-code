@@ -3,6 +3,7 @@ import { Notice } from "obsidian";
 import { LanguageId } from "../main.js";
 import { Outputter } from "../output/Outputter.js";
 import { ExecutorSettings } from "../settings/Settings.js";
+import type { CodeBlockArgs } from "../CodeBlockArgs";
 import AsyncExecutor from "./AsyncExecutor.js";
 import killWithChildren from "./killWithChildren.js";
 
@@ -10,7 +11,7 @@ export default abstract class ReplExecutor extends AsyncExecutor {
     process: ChildProcessWithoutNullStreams;
     settings: ExecutorSettings;
     
-    abstract wrapCode(code: string, finishSigil: string): string;
+    abstract wrapCode(code: string, finishSigil: string, resultsMode?: "value" | "output"): string;
     abstract setup(): Promise<void>;
     abstract removePrompts(output: string, source: "stdout" | "stderr"): string;
     
@@ -54,7 +55,7 @@ export default abstract class ReplExecutor extends AsyncExecutor {
      * @param ext Not used
      * @returns A promise that resolves once the code is done running
      */
-    run(code: string, outputter: Outputter, cmd: string, cmdArgs: string, ext: string): Promise<void> {
+    run(code: string, outputter: Outputter, cmd: string, cmdArgs: string, ext: string, args?: CodeBlockArgs): Promise<void> {
         outputter.queueBlock();
         
         return this.addJobToQueue((resolve, _reject) => {
@@ -64,7 +65,7 @@ export default abstract class ReplExecutor extends AsyncExecutor {
 
             outputter.startBlock();
 
-            const wrappedCode = this.wrapCode(code, finishSigil);
+            const wrappedCode = this.wrapCode(code, finishSigil, args?.results);
 
             this.process.stdin.write(wrappedCode);
 
