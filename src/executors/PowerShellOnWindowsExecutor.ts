@@ -47,7 +47,7 @@ export default class PowerShellOnWindowsExecutor extends NonInteractiveCodeExecu
 
 				const child = child_process.spawn(cmd, args, {env: process.env, shell: this.usesShell});
 
-				this.handleChildOutput(child, outputter, tempFileName).then(() => {
+				this.handleChildOutput(child, outputter, tempFileName, cmd).then(() => {
 					this.tempFileId = undefined; // Reset the file id to use a new file next time
 				});
 

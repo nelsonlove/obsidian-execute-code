@@ -57,19 +57,19 @@ export default class NonInteractiveCodeExecutor extends Executor {
 
 					// compile c file with gcc and handle possible output
 					const childGCC = child_process.spawn(cmd, args, {env: process.env, shell: this.usesShell});
-					this.handleChildOutput(childGCC, outputter, tempFileName);
+					this.handleChildOutput(childGCC, outputter, tempFileName, cmd);
 					childGCC.on('exit', (code) => {
 						if (code === 0) {
 							// executing the compiled file
 							child = child_process.spawn(tempFileNameWExe, { env: process.env, shell: this.usesShell });
-							this.handleChildOutput(child, outputter, tempFileNameWExe).then(() => {
+							this.handleChildOutput(child, outputter, tempFileNameWExe, tempFileNameWExe).then(() => {
 								this.tempFileId = undefined; // Reset the file id to use a new file next time
 							});
 						}
 					});
 				} else {
 					child = child_process.spawn(cmd, args, { env: process.env, shell: this.usesShell });
-					this.handleChildOutput(child, outputter, tempFileName).then(() => {
+					this.handleChildOutput(child, outputter, tempFileName, cmd).then(() => {
 						this.tempFileId = undefined; // Reset the file id to use a new file next time
 					});
 				}				
@@ -105,7 +105,7 @@ export default class NonInteractiveCodeExecutor extends Executor {
 	 * @param fileName The name of the temporary file that was created for the code execution.
 	 * @returns a promise that will resolve when the child proces finishes
 	 */
-	protected async handleChildOutput(child: child_process.ChildProcessWithoutNullStreams, outputter: Outputter, fileName: string | undefined) {
+	protected async handleChildOutput(child: child_process.ChildProcessWithoutNullStreams, outputter: Outputter, fileName: string | undefined, cmd?: string) {
 		outputter.clear();
 
 		// Kill process on clear
@@ -129,8 +129,12 @@ export default class NonInteractiveCodeExecutor extends Executor {
 		});
 
 		child.on('close', (code) => {
-			if (code !== 0)
-				new Notice("Error!");
+			if (code === 127 || code === 126) {
+				// POSIX shells: 127 = command not found, 126 = found but not executable
+				new Notice(`Execute Code: ${cmd ? `'${cmd}'` : "the configured command"} ${code === 127 ? "was not found" : "is not executable"}. Set the full path to the executable in the plugin settings.`, 10000);
+			} else if (code !== 0) {
+				new Notice(`Execute Code: process exited with code ${code}. See the output below the code block.`);
+			}
 
 			// Resolve the run promise once finished running the code block
 			if (this.resolveRun !== undefined)
@@ -147,7 +151,7 @@ export default class NonInteractiveCodeExecutor extends Executor {
 		});
 
 		child.on('error', (err) => {
-			new Notice("Error!");
+			new Notice(`Execute Code: failed to start ${cmd ? `'${cmd}'` : "process"}: ${err.message}`, 10000);
 			outputter.writeErr(err.toString());
 		});
 	}
