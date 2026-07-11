@@ -33,7 +33,7 @@ export default abstract class ClingExecutor extends NonInteractiveCodeExecutor {
 			const child = child_process.spawn(this.settings.clingPath, childArgs, {env: process.env, shell: this.usesShell});
 			// Set resolve callback to resolve the promise in the child_process.on('close', ...) listener from super.handleChildOutput
 			this.resolveRun = resolve;
-			this.handleChildOutput(child, outputter, this.tempFileId);
+			this.handleChildOutput(child, outputter, this.tempFileId, this.settings.clingPath);
 		});
 	}
 
@@ -41,8 +41,8 @@ export default abstract class ClingExecutor extends NonInteractiveCodeExecutor {
 	 * Run parent NonInteractiveCodeExecutor handleChildOutput logic, but replace temporary main function name
 	 * In all outputs from stdout and stderr callbacks, from temp_<id>() to main() to produce understandable output
 	 */
-	override async handleChildOutput(child: ChildProcessWithoutNullStreams, outputter: Outputter, fileName: string) {		
-		super.handleChildOutput(child, outputter, fileName);
+	override async handleChildOutput(child: ChildProcessWithoutNullStreams, outputter: Outputter, fileName: string, cmd?: string) {
+		super.handleChildOutput(child, outputter, fileName, cmd);
 		// Remove existing stdout and stderr callbacks
 		child.stdout.removeListener("data", this.stdoutCb);
 		child.stderr.removeListener("data", this.stderrCb);
