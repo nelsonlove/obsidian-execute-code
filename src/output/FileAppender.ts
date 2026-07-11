@@ -77,7 +77,10 @@ export default class FileAppender {
                 return data;
             }
 
-            const sanitized = output.endsWith("\n") ? output : output + "\n";
+            // Normalize: strip leading blank lines (REPL executors can emit a
+            // stray fresh-line at block start), ensure a trailing newline
+            let sanitized = output.replace(/^\n+/, "");
+            if (!sanitized.endsWith("\n")) sanitized += "\n";
             const outputBlock = "```output\n" + sanitized + "```";
 
             // Replace an existing output block directly below the code block
