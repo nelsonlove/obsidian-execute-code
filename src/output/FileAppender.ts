@@ -15,7 +15,11 @@ export default class FileAppender {
         try {
             this.codeBlockRange = this.getRangeOfCodeBlock(blockElem);
         } catch (e) {
-            console.warn("Execute Code: couldn't locate this code block in the editor ('run-' blocks and live preview aren't supported) — persistent output will not be saved for it.");
+            // Expected for 'run-' blocks and live preview; constructed at render
+            // time for every block, so don't log above debug level here. The
+            // user is notified in addOutput() if they actually run the block
+            // with persistent output enabled.
+            console.debug("Execute Code: couldn't locate this code block in the editor — persistent output will not be saved for it.");
             this.codeBlockRange = null
         }
     }
