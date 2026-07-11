@@ -4,6 +4,7 @@ import { LanguageId, PluginContext, supportedLanguages } from './main';
 import { Outputter } from './output/Outputter';
 import type { ExecutorSettings } from './settings/Settings';
 import { CodeInjector } from './transforms/CodeInjector';
+import type { CodeBlockArgs } from './CodeBlockArgs';
 import { retrieveFigurePath } from './transforms/LatexFigureName';
 import { modifyLatexCode } from './transforms/LatexTransformer';
 import * as macro from './transforms/Magic';
@@ -17,6 +18,7 @@ export const codeBlockHasButtonClass: string = "has-run-code-button";
 
 interface CodeBlockContext {
     srcCode: string;
+    args?: CodeBlockArgs;
     button: HTMLButtonElement;
     language: LanguageId;
     markdownFile: string;
@@ -37,7 +39,9 @@ async function handleExecution(block: CodeBlockContext) {
     const s: ExecutorSettings = block.outputter.settings;
 
     button.className = disabledClass;
-    block.srcCode = await new CodeInjector(app, s, language).injectCode(srcCode);
+    const injector = new CodeInjector(app, s, language);
+    block.srcCode = await injector.injectCode(srcCode);
+    block.args = injector.mainArgs;
 
     switch (language) {
         case "js": return runCode(s.nodePath, s.nodeArgs, s.jsFileExtension, block, { transform: (code) => macro.expandJS(code) });
@@ -200,7 +204,7 @@ function runCode(cmd: string, cmdArgs: string, ext: string, block: CodeBlockCont
     if (!useShell) block.outputter.startBlock();
 
     const executor = block.executors.getExecutorFor(block.markdownFile, block.language, useShell);
-    executor.run(block.srcCode, block.outputter, cmd, cmdArgs, ext).then(() => {
+    executor.run(block.srcCode, block.outputter, cmd, cmdArgs, ext, block.args).then(() => {
         block.button.className = buttonClass;
         if (!useShell) {
             block.outputter.closeInput();

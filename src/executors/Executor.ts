@@ -1,5 +1,6 @@
 import {Notice} from "obsidian";
 import {Outputter} from "src/output/Outputter";
+import type {CodeBlockArgs} from "src/CodeBlockArgs";
 import * as os from "os";
 import * as path from "path";
 import {LanguageId} from "src/main";
@@ -25,7 +26,7 @@ export default abstract class Executor extends EventEmitter {
 	 * @param cmdArgs arguments for command to run (not used by all executors)
 	 * @param ext file extension for the programming language (not used by all executors)
 	 */
-	abstract run(code: string, outputter: Outputter, cmd: string, cmdArgs: string, ext: string): Promise<void>
+	abstract run(code: string, outputter: Outputter, cmd: string, cmdArgs: string, ext: string, args?: CodeBlockArgs): Promise<void>
 
 	/**
 	 * Exit the runtime for the code.

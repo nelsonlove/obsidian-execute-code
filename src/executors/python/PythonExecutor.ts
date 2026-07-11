@@ -13,7 +13,7 @@ export default class PythonExecutor extends ReplExecutor {
 			return output;
 		}
 	}
-	wrapCode(code: string, finishSigil: string): string {
+	wrapCode(code: string, finishSigil: string, _resultsMode?: "value" | "output"): string {
 		return wrapPython(code, this.globalsDictionaryName, this.printFunctionName, 
 			finishSigil, this.settings.pythonEmbedPlots);
 	}
