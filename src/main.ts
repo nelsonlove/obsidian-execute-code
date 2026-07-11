@@ -13,6 +13,7 @@ import ExecutorManagerView, {
 
 import runAllCodeBlocks from './runAllCodeBlocks';
 import runBlockUnderCursor from './runBlockUnderCursor';
+import tangleCurrentNote from './tangle';
 import { ReleaseNoteModel } from "./ReleaseNoteModal";
 import * as runButton from './RunButton';
 
@@ -75,6 +76,12 @@ export default class ExecuteCodePlugin extends Plugin {
 			id: "run-all-code-blocks-in-file",
 			name: "Run all Code Blocks in Current File",
 			callback: () => runAllCodeBlocks(this.app.workspace)
+		})
+
+		this.addCommand({
+			id: "tangle-current-note",
+			name: "Tangle code blocks in current note",
+			callback: () => tangleCurrentNote(this.app)
 		})
 
 		this.addCommand({

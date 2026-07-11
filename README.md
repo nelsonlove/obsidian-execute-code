@@ -8,6 +8,7 @@
 > - **Reliable [persistent output](#persistent-output)** — results are saved into the note org-babel-style: works in reading view, live preview, and `run-` blocks; re-running replaces the output block
 > - **[`{results="output"|"value"}`](#result-modes-common-lisp-sessions)** block arguments for session blocks
 > - **[Run code block under cursor](#run-the-code-block-under-the-cursor)** command (org-babel `C-c C-c` analog)
+> - **[Noweb references and tangling](#noweb-references-and-tangling-)** — `<<label>>` splicing at run and tangle time, plus a "Tangle code blocks in current note" command
 > - Actionable error notices: the executable name and exit code instead of "Error!"
 > - Run button as a play icon beside the copy button; fixed a stuck load-spinner and compounding code injection on re-runs
 <div align='right'>
@@ -762,6 +763,32 @@ print('should run block 1 and 2')
 `````
 
 Labelled code blocks will be executed before the code block being run, however after global injects and pre blocks.
+
+### Noweb References and Tangling 🧶
+
+A line consisting only of `<<label>>` is replaced by the code of the block labelled `label` before the block runs — org-babel's noweb references. Expansion is recursive and preserves the reference's indentation:
+
+`````
+```lisp {label="greeting"}
+(defun greet (name) (format t "Hello, ~a!~%" name))
+```
+
+```lisp
+<<greeting>>
+(greet "noweb")
+```
+`````
+
+Blocks with a `tangle` argument can be exported to source files with the **Tangle code blocks in current note** command, with noweb references expanded — org-babel's `org-babel-tangle`. Paths may be absolute, start with `~`, or be relative to the note's folder; blocks sharing a target are concatenated in note order, and target files are overwritten:
+
+`````
+```lisp {tangle="~/scripts/greet.lisp"}
+<<greeting>>
+(greet "tangle")
+```
+`````
+
+For tangling, labels are shared across the whole note regardless of language; for running, references resolve against labelled blocks of the same language.
 
 ### Ignoring Code Exports
 

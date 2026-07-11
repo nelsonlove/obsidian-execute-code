@@ -7,6 +7,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## Fork releases (nelsonlove/obsidian-execute-code)
 
+## [2.1.15] - 2026-07-11 (fork)
+### Added
+- Noweb references: a line containing only `<<label>>` splices in the labelled block's code before running (recursive, indentation-preserving)
+- `{tangle="path"}` block argument and a `Tangle code blocks in current note` command that writes blocks (noweb-expanded) to source files, org-babel style
+
 ## [2.1.14] - 2026-07-11 (fork)
 ### Added
 - Common Lisp support via SBCL, including Notebook Mode sessions (upstream PRs #446, #450)

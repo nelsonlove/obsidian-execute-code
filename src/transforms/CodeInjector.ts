@@ -3,6 +3,7 @@ import {MarkdownView, Notice} from "obsidian";
 import {ExecutorSettings} from "src/settings/Settings";
 import {getCodeBlockLanguage, getLanguageAlias, transformMagicCommands} from './TransformCode';
 import {getArgs} from "src/CodeBlockArgs";
+import {expandNoweb} from "./noweb";
 import type {LanguageId} from "src/main";
 import type {CodeBlockArgs} from '../CodeBlockArgs';
 
@@ -69,6 +70,13 @@ export class CodeInjector {
 					injectedCode = `${globalInject}\n${injectedCode}`;
 			}
 		}
+		// Expand noweb <<label>> references against this note's labelled
+		// blocks of the same language
+		const missingRefs = new Set<string>();
+		injectedCode = expandNoweb(injectedCode, this.namedExports, missingRefs);
+		if (missingRefs.size)
+			new Notice(`Unknown noweb reference(s): ${[...missingRefs].join(", ")}`);
+
 		return transformMagicCommands(this.app, injectedCode);
 	}
 
