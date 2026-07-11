@@ -7,6 +7,7 @@ import PythonExecutor from "./executors/python/PythonExecutor";
 import CppExecutor from './executors/CppExecutor';
 import ExecuteCodePlugin, {LanguageId} from "./main";
 import RExecutor from "./executors/RExecutor.js";
+import LispExecutor from "./executors/LispExecutor";
 import CExecutor from "./executors/CExecutor";
 import FSharpExecutor from "./executors/FSharpExecutor";
 import LatexExecutor from "./executors/LatexExecutor";
@@ -14,7 +15,8 @@ import LatexExecutor from "./executors/LatexExecutor";
 const interactiveExecutors: Partial<Record<LanguageId, any>> = {
 	"js": NodeJSExecutor,
 	"python": PythonExecutor,
-	"r": RExecutor
+	"r": RExecutor,
+	"lisp": LispExecutor
 };
 
 const nonInteractiveExecutors: Partial<Record<LanguageId, any>> = {
