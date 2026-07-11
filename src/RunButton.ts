@@ -15,7 +15,7 @@ export const buttonClass: string = "run-code-button";
 export const disabledClass: string = "run-button-disabled";
 export const codeBlockHasButtonClass: string = "has-run-code-button";
 
-interface CodeBlockContext {
+export interface CodeBlockContext {
     srcCode: string;
     button: HTMLButtonElement;
     language: LanguageId;
@@ -29,7 +29,7 @@ interface CodeBlockContext {
  * Injects any required code, transforms the source if needed, and manages button state.
  * @param block Contains context needed for execution including source code, output handler, and UI elements
  */
-async function handleExecution(block: CodeBlockContext) {
+export async function handleExecution(block: CodeBlockContext) {
     const language: LanguageId = block.language;
     const button: HTMLButtonElement = block.button;
     const srcCode: string = block.srcCode;

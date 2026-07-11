@@ -12,6 +12,7 @@ import ExecutorManagerView, {
 } from './ExecutorManagerView';
 
 import runAllCodeBlocks from './runAllCodeBlocks';
+import runBlockUnderCursor from './runBlockUnderCursor';
 import { ReleaseNoteModel } from "./ReleaseNoteModal";
 import * as runButton from './RunButton';
 
@@ -74,6 +75,15 @@ export default class ExecuteCodePlugin extends Plugin {
 			id: "run-all-code-blocks-in-file",
 			name: "Run all Code Blocks in Current File",
 			callback: () => runAllCodeBlocks(this.app.workspace)
+		})
+
+		this.addCommand({
+			id: "run-block-under-cursor",
+			name: "Run code block under cursor",
+			editorCallback: (editor, ctx) => {
+				if (ctx instanceof MarkdownView)
+					runBlockUnderCursor(context, editor, ctx);
+			}
 		})
 
 		if (!this.settings.releaseNote2_1_0wasShowed) {
