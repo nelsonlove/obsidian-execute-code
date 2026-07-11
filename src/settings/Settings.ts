@@ -174,6 +174,10 @@ export interface ExecutorSettings {
 	ocamlPath: string;
 	ocamlArgs: string;
 	ocamlInject: string;
+	lispPath: string;
+	lispArgs: string;
+	lispFileExtension: string;
+	lispInject: string;
 
 	jsInteractive: boolean;
 	tsInteractive: boolean;
@@ -210,6 +214,7 @@ export interface ExecutorSettings {
 	zigInteractive: boolean;
 	ocamlInteractive: boolean;
 	phpInteractive: boolean;
+	lispInteractive: boolean;
 }
 
 
@@ -387,6 +392,10 @@ export const DEFAULT_SETTINGS: ExecutorSettings = {
 	phpArgs: "",
 	phpFileExtension: "php",
 	phpInject: "",
+	lispPath: "sbcl",
+	lispArgs: "--script",
+	lispFileExtension: "lisp",
+	lispInject: "",
 	jsInteractive: true,
 	tsInteractive: false,
 	csInteractive: false,
@@ -422,4 +431,5 @@ export const DEFAULT_SETTINGS: ExecutorSettings = {
 	zigInteractive: false,
 	ocamlInteractive: false,
 	phpInteractive: false,
+	lispInteractive: false,
 }

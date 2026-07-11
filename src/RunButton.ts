@@ -72,6 +72,7 @@ async function handleExecution(block: CodeBlockContext) {
         case "octave": return runCode(s.octavePath, s.octaveArgs, s.octaveFileExtension, block, { shell: true, transform: (code) => macro.expandOctavePlot(code) });
         case "maxima": return runCode(s.maximaPath, s.maximaArgs, s.maximaFileExtension, block, { shell: true, transform: (code) => macro.expandMaximaPlot(code) });
         case "racket": return runCode(s.racketPath, s.racketArgs, s.racketFileExtension, block, { shell: true });
+        case "lisp": return runCode(s.lispPath, s.lispArgs, s.lispFileExtension, block, { shell: true });
         case "applescript": return runCode(s.applescriptPath, s.applescriptArgs, s.applescriptFileExtension, block, { shell: true });
         case "zig": return runCode(s.zigPath, s.zigArgs, "zig", block, { shell: true });
         case "ocaml": return runCode(s.ocamlPath, s.ocamlArgs, "ocaml", block, { shell: true });

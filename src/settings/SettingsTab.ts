@@ -36,6 +36,7 @@ import makeApplescriptSettings from "./per-lang/makeApplescriptSettings";
 import makeZigSettings from "./per-lang/makeZigSettings";
 import makeOCamlSettings from "./per-lang/makeOCamlSettings";
 import makeSwiftSettings from "./per-lang/makeSwiftSettings";
+import makeLispSettings from "./per-lang/makeLispSettings";
 
 
 /**
@@ -162,6 +163,7 @@ export class SettingsTab extends PluginSettingTab {
 		makeScalaSettings(this, this.makeContainerFor("scala"));
 		makeSwiftSettings(this, this.makeContainerFor("swift"));
 		makeRacketSettings(this, this.makeContainerFor("racket"));
+		makeLispSettings(this, this.makeContainerFor("lisp"));
 		makeFSharpSettings(this, this.makeContainerFor("fsharp"));
 		makeRubySettings(this, this.makeContainerFor("ruby"));
 		makeSQLSettings(this, this.makeContainerFor("sql"));
