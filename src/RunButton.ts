@@ -1,4 +1,4 @@
-import { App, Workspace, MarkdownView } from 'obsidian';
+import { App, Workspace, MarkdownView, setIcon } from 'obsidian';
 import ExecutorContainer from './ExecutorContainer';
 import { LanguageId, PluginContext, supportedLanguages } from './main';
 import { Outputter } from './output/Outputter';
@@ -179,7 +179,8 @@ function createButton(): HTMLButtonElement {
     console.debug("Add run button");
     const button = document.createElement("button");
     button.classList.add(buttonClass);
-    button.setText(buttonText);
+    setIcon(button, "play");
+    button.setAttribute("aria-label", buttonText);
     return button;
 }
 
@@ -203,7 +204,10 @@ function runCode(cmd: string, cmdArgs: string, ext: string, block: CodeBlockCont
         block.button.className = buttonClass;
         if (!useShell) {
             block.outputter.closeInput();
-            block.outputter.finishBlock();
         }
+        // Always mark the block finished: interactive (REPL) executors call
+        // startBlock() themselves regardless of useShell, and a run that
+        // never clears its load-state indicator leaves a stuck spinner.
+        block.outputter.finishBlock();
     });
 }

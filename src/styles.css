@@ -40,11 +40,22 @@ button.run-code-button {
 	display: none;
 	color: var(--text-muted);
 	position: absolute;
-	bottom: 0;
-	right: 0;
-	margin: 5px;
-	padding: 5px 20px 5px 20px;
+	top: var(--size-2-2, 4px);
+	right: var(--size-2-2, 4px);
+	margin: 0;
+	padding: var(--size-2-2, 4px) var(--size-2-3, 6px);
+	align-items: center;
+	justify-content: center;
 	z-index: 100;
+}
+
+button.run-code-button:hover {
+	color: var(--text-normal);
+}
+
+/* Shift the copy button left so the run button sits at the right edge */
+.has-run-code-button pre > button.copy-code-button {
+	right: calc(var(--size-2-2, 4px) + 2.4em);
 }
 
 button.clear-button {
@@ -58,7 +69,10 @@ button.clear-button {
 	z-index: 100;
 }
 
-pre:hover .run-code-button,
+pre:hover .run-code-button {
+	display: flex;
+}
+
 pre:hover .clear-button {
 	display: block;
 }
