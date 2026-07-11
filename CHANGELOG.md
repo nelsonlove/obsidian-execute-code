@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 
+## Fork releases (nelsonlove/obsidian-execute-code)
+
+## [2.1.14] - 2026-07-11 (fork)
+### Added
+- Common Lisp support via SBCL, including Notebook Mode sessions (upstream PRs #446, #450)
+- `{results="output"|"value"}` block arguments for session blocks, like org-babel's `:results` (#450)
+- `Run code block under cursor` command (#452)
+- Error notices name the executable and exit code; "command not found" points at the path settings (#447)
+
+### Changed
+- Persistent output rewritten: output is buffered per run and written into the note once on completion via `Vault.process`, so it works in reading view, live preview, and `run-` blocks; re-runs replace the output block; saved output blocks are no longer hidden in reading view (#449)
+- Run button is a play icon at the top right, beside the copy button (#453)
+
+### Fixed
+- Re-running a block no longer compounds pre/post/import code injections (#451)
+- Load-state spinner no longer sticks (with its shadow) after session runs of shell-invoked languages (#453)
+- Persistent-output failures notify once per run instead of spamming the console per output chunk (#448/#449)
+
+
 ## [2.1.2]
 Rerelease of 2.1.1 to fix the problems with updating the plugin.
 

@@ -1,4 +1,15 @@
 # Obsidian Execute Code Plugin
+
+> [!NOTE]
+> **This is a maintained fork** of [twibiral/obsidian-execute-code](https://github.com/twibiral/obsidian-execute-code), which appears dormant since mid-2025. Install it via [BRAT](https://github.com/TfTHacker/obsidian42-brat) with the repo `nelsonlove/obsidian-execute-code`. All additions have also been offered upstream (PRs [#446](https://github.com/twibiral/obsidian-execute-code/pull/446)–[#453](https://github.com/twibiral/obsidian-execute-code/pull/453)).
+>
+> **Fork additions:**
+> - **Common Lisp** support via SBCL, including [Notebook Mode](#notebook-mode) (a persistent session per note)
+> - **Reliable [persistent output](#persistent-output)** — results are saved into the note org-babel-style: works in reading view, live preview, and `run-` blocks; re-running replaces the output block
+> - **[`{results="output"|"value"}`](#result-modes-common-lisp-sessions)** block arguments for session blocks
+> - **[Run code block under cursor](#run-the-code-block-under-the-cursor)** command (org-babel `C-c C-c` analog)
+> - Actionable error notices: the executable name and exit code instead of "Error!"
+> - Run button as a play icon beside the copy button; fixed a stuck load-spinner and compounding code injection on re-runs
 <div align='right'>
 
 ![Obsidian Downloads](https://img.shields.io/badge/dynamic/json?color=8572db&labelColor=1e1e1e&label=Downloads&query=$['execute-code'].downloads&url=https://raw.githubusercontent.com/obsidianmd/obsidian-releases/master/community-plugin-stats.json) 
@@ -531,7 +542,8 @@ println("Hello, World!")
 <details>
 <summary>Common Lisp</summary>
 
-- Requirements: SBCL is installed and the correct path is set in the settings.
+- Requirements: SBCL is installed and the correct path is set in the settings (use an absolute path, e.g. `/opt/homebrew/bin/sbcl` — GUI apps don't inherit your shell's PATH).
+- Supports Notebook Mode: all lisp blocks in a note share a persistent SBCL image, and `{results="output"}` / `{results="value"}` select what a block reports.
 
 ```lisp
 (format t "Hello, World!~%")
@@ -767,7 +779,7 @@ print('should not run any pre blocks or global injects')
 
 ### Notebook Mode
 
-A few languages (currently JS and Python) support *Notebook Mode*. If a language is using Notebook Mode (configurable in Settings), then all code blocks in a given file will execute in the same environment.
+A few languages (currently JS, Python, R, and Common Lisp) support *Notebook Mode*. If a language is using Notebook Mode (configurable in Settings), then all code blocks in a given file will execute in the same environment.
 
 Variables functions, etc. defined in one code block will be available in other code blocks. Code blocks are executed on demand; the order of code blocks in the file does not affect the order in which they are executed:
 
@@ -791,18 +803,31 @@ undefined
 To manage the open runtimes for Notebook Mode, you can use the `Open Code Runtime Management` command in the command palette. From this sidebar window, you can stop kernels. **Note: force-stopping requires `taskkill` on Windows and `pkill` on Unix. 99% of systems should have these preinstalled: if yours doesn't, please [file an issue](https://github.com/twibiral/obsidian-execute-code/issues/new/choose)**
 
 
-### Persistent Output \[Experimental\]
+### Result Modes (Common Lisp sessions)
 
-Since version 2.0.0, the plugin supports persistent output. This means that the output of a code block is 
-stored in the note and will be displayed when you open the note again. This is useful for long-running code blocks or 
-code blocks that produce a lot of output. The output is stored in the note as a comment and will be displayed in the 
-preview mode.
+Session (Notebook Mode) blocks echo the value of every form, REPL-style. The `results` argument selects what a block reports instead, like org-babel's `:results`:
 
-To enable this feature, you have to enable the setting `Persistent Output` in the plugin settings.
-We recommend reopening open notes that contain code blocks after enabling this feature.
+`````
+```lisp {results="output"}
+(format t "only stdout is kept~%")
+(* 6 7)
+```
 
-⚠ This feature is still experimental and may not work as expected in all cases!
-We recommend that you disable this feature if you encounter any problems.
+```lisp {results="value"}
+(format t "stdout is discarded~%")
+(* 6 7)   ; only 42, the last form's value, is reported
+```
+`````
+
+### Persistent Output
+
+With the `Persistent Output` setting enabled, a code block's output is saved into the note itself, in an `output` code block right below it — like org-babel's `#+RESULTS:`. It works in reading view, live preview, and for `run-` prefixed blocks. Re-running a block **replaces** its previous output instead of appending; the saved block is plain markdown, so it renders in every view and can be edited by hand (until the next run regenerates it). Output is written once, when the block finishes running.
+
+If the plugin can't locate the block in the note (for example, its source was edited while it ran), it tells you once per run via a notice — the output is then only shown on screen.
+
+### Run the code block under the cursor
+
+The `Run code block under cursor` command executes the fenced code block containing the editor cursor — in source mode or live preview, without needing the rendered run button (which disappears in live preview while the cursor is inside the block). The output is saved below the block via persistent output, which must be enabled. Bind it to a hotkey for an org-babel-style `C-c C-c`.
 
 
 ## Misc 📦
