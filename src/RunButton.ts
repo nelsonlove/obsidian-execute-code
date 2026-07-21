@@ -41,6 +41,7 @@ async function handleExecution(block: CodeBlockContext) {
 
     switch (language) {
         case "js": return runCode(s.nodePath, s.nodeArgs, s.jsFileExtension, block, { transform: (code) => macro.expandJS(code) });
+        case "obsidianjs": return runCode("", "", "", block);
         case "java": return runCode(s.javaPath, s.javaArgs, s.javaFileExtension, block);
         case "python": return runCode(s.pythonPath, s.pythonArgs, s.pythonFileExtension, block, { transform: (code) => macro.expandPython(code, s) });
         case "shell": return runCode(s.shellPath, s.shellArgs, s.shellFileExtension, block, { shell: true });

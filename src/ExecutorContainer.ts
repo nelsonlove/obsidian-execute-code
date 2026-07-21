@@ -10,6 +10,7 @@ import RExecutor from "./executors/RExecutor.js";
 import CExecutor from "./executors/CExecutor";
 import FSharpExecutor from "./executors/FSharpExecutor";
 import LatexExecutor from "./executors/LatexExecutor";
+import ObsidianJSExecutor from "./executors/ObsidianJSExecutor";
 
 const interactiveExecutors: Partial<Record<LanguageId, any>> = {
 	"js": NodeJSExecutor,
@@ -76,7 +77,7 @@ export default class ExecutorContainer extends EventEmitter implements Iterable<
 	 */
 	private setExecutorInExecutorsObject(file: string, language: LanguageId, needsShell: boolean) {
 		const exe = this.createExecutorFor(file, language, needsShell);
-		if (!(exe instanceof NonInteractiveCodeExecutor)) this.emit("add", exe);
+		if (!(exe instanceof NonInteractiveCodeExecutor) && !(exe instanceof ObsidianJSExecutor)) this.emit("add", exe);
 		exe.on("close", () => {
 			delete this.executors[language][file];
 		});
@@ -93,6 +94,7 @@ export default class ExecutorContainer extends EventEmitter implements Iterable<
 	 * @returns a new executor associated with the given language and file
 	 */
 	private createExecutorFor(file: string, language: LanguageId, needsShell: boolean) {
+		if (language === "obsidianjs") return new ObsidianJSExecutor(this.plugin, file);
 		// Interactive language executor
 		if (this.plugin.settings[`${language}Interactive`]) {
 			if (!(language in interactiveExecutors))
