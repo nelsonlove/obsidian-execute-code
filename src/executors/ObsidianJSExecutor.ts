@@ -39,11 +39,37 @@ export default class ObsidianJSExecutor extends Executor {
 	}
 
 	/**
-	 * Session-lifecycle `plugin` context. Task 4 fills this in; for now it
-	 * behaves like the ephemeral context so the ephemeral path is testable.
+	 * Build the session-lifecycle `plugin` object backed by a fresh Component.
+	 * Re-running the same block first disposes its previous registrations
+	 * (removing duplicate commands/listeners); the Component is a child of the
+	 * plugin so everything is released on plugin unload too. Nothing persists
+	 * across an Obsidian restart — that is inherent to the Run-button model.
 	 */
-	private makeLifecycleContext(_code: string): Record<string, unknown> {
-		return { app: this.plugin.app };
+	private makeLifecycleContext(code: string) {
+		const app = this.plugin.app;
+		const key = hashCode(code);
+
+		const previous = this.components.get(key);
+		if (previous) this.plugin.removeChild(previous); // unloads → runs registered disposers
+
+		const component = new Component();
+		this.plugin.addChild(component); // auto-unloads on plugin unload
+		this.components.set(key, component);
+
+		return {
+			app,
+			addCommand: (cmd: Parameters<ExecuteCodePlugin["addCommand"]>[0]) => {
+				const registered = this.plugin.addCommand(cmd);
+				const fullId = `${this.plugin.manifest.id}:${cmd.id}`;
+				// addCommand has no Component auto-cleanup; remove it explicitly on unload.
+				component.register(() => (app as unknown as { commands: { removeCommand(id: string): void } }).commands.removeCommand(fullId));
+				return registered;
+			},
+			registerEvent: component.registerEvent.bind(component),
+			register: component.register.bind(component),
+			registerDomEvent: component.registerDomEvent.bind(component),
+			registerInterval: component.registerInterval.bind(component),
+		};
 	}
 
 	async stop(): Promise<void> {
