@@ -28,6 +28,7 @@ import makeRacketSettings from "./per-lang/makeRacketSettings.js";
 import makeShellSettings from "./per-lang/makeShellSettings";
 import makeBatchSettings from "./per-lang/makeBatchSettings";
 import makeTsSettings from "./per-lang/makeTsSettings";
+import makeObsidianJsSettings from "./per-lang/makeObsidianJsSettings";
 import { ExecutorSettings } from "./Settings";
 import makeSQLSettings from "./per-lang/makeSQLSettings";
 import makeOctaviaSettings from "./per-lang/makeOctaveSettings";
@@ -140,6 +141,7 @@ export class SettingsTab extends PluginSettingTab {
 
 		makeJsSettings(this, this.makeContainerFor("js")); // JavaScript / Node
 		makeTsSettings(this, this.makeContainerFor("ts")); // TypeScript
+		makeObsidianJsSettings(this, this.makeContainerFor("obsidianjs")); // Obsidian JS (in-app)
 		makeLeanSettings(this, this.makeContainerFor("lean"));
 		makeLuaSettings(this, this.makeContainerFor("lua"));
 		makeDartSettings(this, this.makeContainerFor("dart"));
