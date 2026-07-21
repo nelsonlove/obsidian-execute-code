@@ -175,6 +175,7 @@ export interface ExecutorSettings {
 	ocamlArgs: string;
 	ocamlInject: string;
 
+	obsidianJsTier: "ephemeral" | "lifecycle";
 	jsInteractive: boolean;
 	tsInteractive: boolean;
 	csInteractive: boolean;
@@ -210,6 +211,7 @@ export interface ExecutorSettings {
 	zigInteractive: boolean;
 	ocamlInteractive: boolean;
 	phpInteractive: boolean;
+	obsidianjsInteractive: boolean;
 }
 
 
@@ -387,6 +389,7 @@ export const DEFAULT_SETTINGS: ExecutorSettings = {
 	phpArgs: "",
 	phpFileExtension: "php",
 	phpInject: "",
+	obsidianJsTier: "ephemeral",
 	jsInteractive: true,
 	tsInteractive: false,
 	csInteractive: false,
@@ -422,4 +425,5 @@ export const DEFAULT_SETTINGS: ExecutorSettings = {
 	zigInteractive: false,
 	ocamlInteractive: false,
 	phpInteractive: false,
+	obsidianjsInteractive: false,
 }

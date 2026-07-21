@@ -35,4 +35,5 @@ export const DISPLAY_NAMES: Record<LanguageId, string> = {
     applescript: "Applescript",
 	zig: "Zig",
 	ocaml: "OCaml",
+	obsidianjs: "Obsidian JS",
 } as const;
