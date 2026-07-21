@@ -23,7 +23,7 @@ export default class ObsidianJSExecutor extends Executor {
 		this.plugin = plugin;
 	}
 
-	async run(code: string, outputter: Outputter): Promise<void> {
+	async run(code: string, outputter: Outputter, _cmd?: string, _cmdArgs?: string, _ext?: string): Promise<void> {
 		const app = this.plugin.app;
 		const consoleShim = makeConsoleShim(outputter);
 		const lifecycle = this.plugin.settings.obsidianJsTier === "lifecycle";
@@ -47,6 +47,9 @@ export default class ObsidianJSExecutor extends Executor {
 	 */
 	private makeLifecycleContext(code: string) {
 		const app = this.plugin.app;
+		// Keyed by source hash (the executor is already per-file). Two blocks with
+		// byte-identical source in one note therefore share a Component — re-running
+		// one disposes the other's registrations. Intentional and rare.
 		const key = hashCode(code);
 
 		const previous = this.components.get(key);
