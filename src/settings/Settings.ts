@@ -180,6 +180,7 @@ export interface ExecutorSettings {
 	lispInject: string;
 
 	jsInteractive: boolean;
+	obsidianjsInteractive: boolean;
 	tsInteractive: boolean;
 	csInteractive: boolean;
 	latexInteractive: boolean;
@@ -397,6 +398,7 @@ export const DEFAULT_SETTINGS: ExecutorSettings = {
 	lispFileExtension: "lisp",
 	lispInject: "",
 	jsInteractive: true,
+	obsidianjsInteractive: false,
 	tsInteractive: false,
 	csInteractive: false,
 	latexInteractive: false,

@@ -631,6 +631,24 @@ Squiggle: For Squiggle support take a look at the [Obsidian Squiggle plugin](htt
 
 
 
+### Obsidian JS (in-app execution)
+
+The `obsidianjs` language runs a JavaScript block **inside Obsidian's own process**, with
+live access to `app` and `require('obsidian')` — unlike `js`, which runs in a separate Node
+process. Use it to script the vault, prototype against the plugin API, or inspect state.
+
+    ```obsidianjs
+    return app.vault.getMarkdownFiles().length
+    ```
+
+Top-level `await` is supported, `console.log`/`return` values are shown inline, and errors
+are printed to the block's output. Each run is independent — no persistent state or
+command/event registration; `require('obsidian')` resolves the live module, everything else
+falls back to the Node `require`.
+
+> WARNING: `obsidianjs` blocks run with full vault access and can modify or delete your notes.
+> Only run code you understand.
+
 ## Magic Commands 🪄
 
 Magic commands are some meta commands that can be used in the code block. They are processed by the plugin before the source code is executed.
