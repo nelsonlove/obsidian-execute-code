@@ -37,7 +37,11 @@ async function handleExecution(block: CodeBlockContext) {
     const s: ExecutorSettings = block.outputter.settings;
 
     button.className = disabledClass;
-    block.srcCode = await new CodeInjector(app, s, language).injectCode(srcCode);
+    // obsidianjs runs in-renderer and must not get Node-style code injection
+    // (no per-language Inject setting exists for it → would prepend the literal "undefined").
+    block.srcCode = language === "obsidianjs"
+        ? srcCode
+        : await new CodeInjector(app, s, language).injectCode(srcCode);
 
     switch (language) {
         case "js": return runCode(s.nodePath, s.nodeArgs, s.jsFileExtension, block, { transform: (code) => macro.expandJS(code) });

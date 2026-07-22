@@ -211,7 +211,6 @@ export interface ExecutorSettings {
 	zigInteractive: boolean;
 	ocamlInteractive: boolean;
 	phpInteractive: boolean;
-	obsidianjsInteractive: boolean;
 }
 
 
@@ -425,5 +424,4 @@ export const DEFAULT_SETTINGS: ExecutorSettings = {
 	zigInteractive: false,
 	ocamlInteractive: false,
 	phpInteractive: false,
-	obsidianjsInteractive: false,
 }

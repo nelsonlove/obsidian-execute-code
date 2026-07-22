@@ -27,15 +27,35 @@ export default class ObsidianJSExecutor extends Executor {
 		const app = this.plugin.app;
 		const consoleShim = makeConsoleShim(outputter);
 		const lifecycle = this.plugin.settings.obsidianJsTier === "lifecycle";
-		const ctx = lifecycle ? this.makeLifecycleContext(code) : { app };
+		const ctx = lifecycle ? this.makeLifecycleContext(code) : this.makeEphemeralContext();
 
 		try {
 			const fn = new AsyncFunction("app", "plugin", "require", "console", code);
 			const ret = await fn(app, ctx, window.require, consoleShim);
 			if (ret !== undefined) outputter.write(stringifyArg(ret) + "\n");
 		} catch (e) {
-			outputter.writeErr(stringifyArg(e) + "\n");
+			// The error path shows the full stack; stringifyArg keeps *values* concise.
+			const detail = e instanceof Error ? (e.stack ?? `${e.name}: ${e.message}`) : stringifyArg(e);
+			outputter.writeErr(detail + "\n");
 		}
+	}
+
+	/**
+	 * Ephemeral `plugin` context: `app` only. The lifecycle-only methods throw a
+	 * clear hint rather than an opaque "is not a function" if a user runs a
+	 * lifecycle-style block while the tier is left at the ephemeral default.
+	 */
+	private makeEphemeralContext() {
+		const hint = "is only available in the 'Session lifecycle' execution tier (Settings \u2192 Execute Code \u2192 Obsidian JS).";
+		const guard = (name: string) => () => { throw new Error(`plugin.${name} ${hint}`); };
+		return {
+			app: this.plugin.app,
+			addCommand: guard("addCommand"),
+			registerEvent: guard("registerEvent"),
+			register: guard("register"),
+			registerDomEvent: guard("registerDomEvent"),
+			registerInterval: guard("registerInterval"),
+		};
 	}
 
 	/**
@@ -47,9 +67,12 @@ export default class ObsidianJSExecutor extends Executor {
 	 */
 	private makeLifecycleContext(code: string) {
 		const app = this.plugin.app;
-		// Keyed by source hash (the executor is already per-file). Two blocks with
-		// byte-identical source in one note therefore share a Component — re-running
-		// one disposes the other's registrations. Intentional and rare.
+		// Keyed by a hash of the block source (the executor is already per-file).
+		// Re-running an UNCHANGED block disposes its previous registration first.
+		// Limitation: editing a block changes its hash, so the prior run's Component
+		// is not found here and is only released on plugin unload — re-running an
+		// *edited* lifecycle block can leave the previous command/listener registered
+		// until then. Identical-source blocks in one note also share a Component.
 		const key = hashCode(code);
 
 		const previous = this.components.get(key);
@@ -65,7 +88,13 @@ export default class ObsidianJSExecutor extends Executor {
 				const registered = this.plugin.addCommand(cmd);
 				const fullId = `${this.plugin.manifest.id}:${cmd.id}`;
 				// addCommand has no Component auto-cleanup; remove it explicitly on unload.
-				component.register(() => (app as unknown as { commands: { removeCommand(id: string): void } }).commands.removeCommand(fullId));
+				component.register(() => {
+					try {
+						(app as unknown as { commands?: { removeCommand?(id: string): void } }).commands?.removeCommand?.(fullId);
+					} catch (e) {
+						console.error(`obsidianjs: failed to remove command ${fullId}`, e);
+					}
+				});
 				return registered;
 			},
 			registerEvent: component.registerEvent.bind(component),

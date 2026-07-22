@@ -15,7 +15,7 @@ export function hashCode(str: string): string {
 /** Render a single console/return argument to a display string. */
 export function stringifyArg(arg: unknown): string {
 	if (typeof arg === "string") return arg;
-	if (arg instanceof Error) return arg.stack ?? String(arg);
+	if (arg instanceof Error) return `${arg.name}: ${arg.message}`;
 	try {
 		return JSON.stringify(arg, null, 2) ?? String(arg);
 	} catch {
@@ -40,7 +40,14 @@ export function makeConsoleShim(outputter: Outputter): Console {
 	shim.log = (...a: unknown[]) => out(a);
 	shim.info = (...a: unknown[]) => out(a);
 	shim.debug = (...a: unknown[]) => out(a);
+	shim.dir = (...a: unknown[]) => out(a);
+	shim.trace = (...a: unknown[]) => out(a);
+	shim.table = (...a: unknown[]) => out(a);
+	shim.group = (...a: unknown[]) => out(a);
+	shim.groupCollapsed = (...a: unknown[]) => out(a);
+	shim.groupEnd = () => {};
 	shim.warn = (...a: unknown[]) => err(a);
 	shim.error = (...a: unknown[]) => err(a);
+	shim.assert = (condition?: boolean, ...a: unknown[]) => { if (!condition) err(["Assertion failed:", ...a]); };
 	return shim;
 }
