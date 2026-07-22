@@ -618,17 +618,11 @@ process. Use it to script the vault, prototype against the plugin API, or inspec
     ```
 
 Top-level `await` is supported, `console.log`/`return` values are shown inline, and errors
-are printed to the block’s output.
-
-**Execution tier** (Settings → Execute Code → Obsidian JS):
-- **Ephemeral** (default) — the block runs once; `app` is available, nothing is registered.
-- **Session lifecycle** — the `plugin` argument also exposes `addCommand` and `registerEvent`
-  / `register` / `registerDomEvent` / `registerInterval`. Registrations are cleaned up when
-  the block is re-run or the plugin unloads.
+are printed to the block’s output. Each run is independent — there is no persistent state or
+command/event registration; a Run button is the wrong place to mutate Obsidian’s lifecycle.
 
 > WARNING: `obsidianjs` blocks run with full vault access and can modify or delete your notes.
-> Only run code you understand. Registrations do **not** survive an Obsidian restart (there is
-> no run-at-startup loader — this is the Run button, not a plugin loader).
+> Only run code you understand.
 
 
 ## Magic Commands 🪄

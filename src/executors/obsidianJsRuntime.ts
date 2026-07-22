@@ -1,17 +1,5 @@
 import { Outputter } from "src/output/Outputter";
 
-/**
- * Deterministic djb2-xor string hash, hex-encoded. Gives each obsidianjs code
- * block a stable identity (per file) for session-lifecycle cleanup.
- */
-export function hashCode(str: string): string {
-	let hash = 5381;
-	for (let i = 0; i < str.length; i++) {
-		hash = ((hash << 5) + hash) ^ str.charCodeAt(i);
-	}
-	return (hash >>> 0).toString(16);
-}
-
 /** Render a single console/return argument to a display string. */
 export function stringifyArg(arg: unknown): string {
 	if (typeof arg === "string") return arg;
@@ -29,9 +17,10 @@ export function formatConsoleArgs(args: unknown[]): string {
 }
 
 /**
- * Build a console-like object whose log/info/debug go to stdout styling and
- * warn/error go to stderr styling, both routed into the block's Outputter.
- * Inherits from the real console so uncommon methods still exist.
+ * Build a console-like object whose output-producing methods route into the
+ * block's Outputter (log/info/debug/dir/trace/table/group → stdout styling;
+ * warn/error/failed-assert → stderr styling). Inherits from the real console so
+ * any method not shimmed here still exists.
  */
 export function makeConsoleShim(outputter: Outputter): Console {
 	const out = (args: unknown[]) => outputter.write(formatConsoleArgs(args) + "\n");
