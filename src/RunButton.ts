@@ -42,11 +42,18 @@ export async function handleExecution(block: CodeBlockContext) {
     // Run against a copy of the block context: the context is shared between
     // runs of the same rendered block, so writing the injected code back into
     // it would compound pre/post/import injections on every re-run.
-    const injector = new CodeInjector(app, s, language);
-    block = { ...block, srcCode: await injector.injectCode(srcCode), args: injector.mainArgs };
+    if (language === "obsidianjs") {
+        // In-app eval gets no Node-style injection: there is no obsidianjsInject
+        // setting, so injection would prepend the literal "undefined".
+        block = { ...block, srcCode };
+    } else {
+        const injector = new CodeInjector(app, s, language);
+        block = { ...block, srcCode: await injector.injectCode(srcCode), args: injector.mainArgs };
+    }
 
     switch (language) {
         case "js": return runCode(s.nodePath, s.nodeArgs, s.jsFileExtension, block, { transform: (code) => macro.expandJS(code) });
+        case "obsidianjs": return runCode("", "", "", block);
         case "java": return runCode(s.javaPath, s.javaArgs, s.javaFileExtension, block);
         case "python": return runCode(s.pythonPath, s.pythonArgs, s.pythonFileExtension, block, { transform: (code) => macro.expandPython(code, s) });
         case "shell": return runCode(s.shellPath, s.shellArgs, s.shellFileExtension, block, { shell: true });
