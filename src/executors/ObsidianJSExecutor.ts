@@ -1,3 +1,4 @@
+import * as obsidianModule from "obsidian";
 import Executor from "./Executor";
 import { Outputter } from "src/output/Outputter";
 import ExecuteCodePlugin from "src/main";
@@ -29,9 +30,16 @@ export default class ObsidianJSExecutor extends Executor {
 	async run(code: string, outputter: Outputter, _cmd?: string, _cmdArgs?: string, _ext?: string): Promise<void> {
 		const app = this.plugin.app;
 		const consoleShim = makeConsoleShim(outputter);
+		// window.require (Electron) resolves Node builtins but NOT "obsidian",
+		// which Obsidian exposes only to plugin code. Special-case it to the
+		// module this plugin already imports; fall back for everything else.
+		const requireShim = (id: string): unknown =>
+			id === "obsidian"
+				? obsidianModule
+				: (window as unknown as { require(id: string): unknown }).require(id);
 		try {
 			const fn = new AsyncFunction("app", "require", "console", code);
-			const ret = await fn(app, window.require, consoleShim);
+			const ret = await fn(app, requireShim, consoleShim);
 			if (ret !== undefined) outputter.write(stringifyArg(ret) + "\n");
 		} catch (e) {
 			// The error path shows the full stack; stringifyArg keeps values concise.
