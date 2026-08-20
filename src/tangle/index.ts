@@ -68,7 +68,7 @@ export async function tangleNote(app: App, note: TFile, settings: TangleSettings
 			date,
 			comment: commentTokenFor(a.language),
 		});
-		return writeArtifact(a.destination, header + "\n" + a.chunks.join("\n"), settings.marker);
+		return writeArtifact(a.destination, header, a.chunks.join("\n"), settings.marker);
 	});
 
 	return { note: note.path, eligible: true, outcomes, refused: plan.refused, missingRefs: plan.missingRefs };

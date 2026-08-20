@@ -48,3 +48,24 @@ export function looksGenerated(existingContent: string, marker: string): boolean
 	if (!marker || !marker.trim()) return false; // an empty marker must not make every file overwritable
 	return existingContent.slice(0, 4096).includes(marker);
 }
+
+/**
+ * Split our own header off an artifact and return just the generated body.
+ *
+ * Needed because the default header carries a TIMESTAMP. Comparing whole files to
+ * decide "has anything changed?" would therefore always say yes, and every sweep would
+ * rewrite every artifact — churning mtimes, waking file watchers, and (the reason this
+ * was worth fixing rather than living with) invalidating any freshness check that
+ * compares a generated file's mtime against its source.
+ *
+ * Returns null when the header cannot be located, which callers treat as "assume
+ * changed" — the safe direction, since a spurious rewrite costs an mtime and a missed
+ * one would leave a stale artifact.
+ */
+export function stripGeneratedHeader(content: string, marker: string): string | null {
+	if (!looksGenerated(content, marker)) return null;
+	// We always emit `header + "\n" + body`, and the header itself ends in a newline, so
+	// the blank line between them is the boundary.
+	const i = content.indexOf("\n\n");
+	return i === -1 ? null : content.slice(i + 2);
+}

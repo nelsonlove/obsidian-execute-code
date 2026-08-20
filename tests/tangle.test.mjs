@@ -12,7 +12,7 @@ import {
 	resolveTangleRoot,
 } from "../src/tangle/resolve.ts";
 import {
-	renderHeader, looksGenerated, DEFAULT_MARKER, DEFAULT_HEADER_TEMPLATE,
+	renderHeader, looksGenerated, stripGeneratedHeader, DEFAULT_MARKER, DEFAULT_HEADER_TEMPLATE,
 } from "../src/tangle/header.ts";
 import { planTangle, writeArtifact, parseNoteBlocks } from "../src/tangle/core.ts";
 import { textToConditions, conditionsToText } from "../src/tangle/conditionText.ts";
@@ -293,7 +293,7 @@ describe("rails 1 and 4 — writing", () => {
 
 	test("writes a new file", () => {
 		const dest = path.join(tmp, "new.js");
-		const out = writeArtifact(dest, header + "body\n", DEFAULT_MARKER);
+		const out = writeArtifact(dest, header, "body\n", DEFAULT_MARKER);
 		assert.equal(out.status, "written");
 		assert.match(fs.readFileSync(dest, "utf8"), /body/);
 	});
@@ -301,28 +301,51 @@ describe("rails 1 and 4 — writing", () => {
 	test("REFUSES to overwrite a file it did not generate", () => {
 		const dest = path.join(tmp, "handwritten.js");
 		fs.writeFileSync(dest, "// a human wrote this\nimportant();\n");
-		const out = writeArtifact(dest, header + "clobber\n", DEFAULT_MARKER);
+		const out = writeArtifact(dest, header, "clobber\n", DEFAULT_MARKER);
 		assert.equal(out.status, "refused-foreign");
 		assert.match(fs.readFileSync(dest, "utf8"), /important\(\)/);
 	});
 
 	test("overwrites its own output, and reports an identical write as unchanged", () => {
 		const dest = path.join(tmp, "mine.js");
-		assert.equal(writeArtifact(dest, header + "v1\n", DEFAULT_MARKER).status, "written");
-		assert.equal(writeArtifact(dest, header + "v2\n", DEFAULT_MARKER).status, "written");
+		assert.equal(writeArtifact(dest, header, "v1\n", DEFAULT_MARKER).status, "written");
+		assert.equal(writeArtifact(dest, header, "v2\n", DEFAULT_MARKER).status, "written");
 		assert.match(fs.readFileSync(dest, "utf8"), /v2/);
-		assert.equal(writeArtifact(dest, header + "v2\n", DEFAULT_MARKER).status, "unchanged");
+		assert.equal(writeArtifact(dest, header, "v2\n", DEFAULT_MARKER).status, "unchanged");
 	});
 
 	test("leaves no temp file behind", () => {
 		const dest = path.join(tmp, "sub", "deep.js");
-		writeArtifact(dest, header + "x\n", DEFAULT_MARKER);
+		writeArtifact(dest, header, "x\n", DEFAULT_MARKER);
 		const leftovers = fs.readdirSync(path.dirname(dest)).filter((f) => f.includes("tangle-tmp"));
 		assert.deepEqual(leftovers, []);
 	});
 
+	test("a CHANGED header alone does not rewrite the file", () => {
+		// The default header carries a timestamp. If "unchanged" compared whole files, every
+		// sweep would rewrite every artifact — churning mtimes, waking watchers, and
+		// invalidating any freshness check that compares generated mtime against source.
+		const dest = path.join(tmp, "stamped.js");
+		const h1 = renderHeader(DEFAULT_HEADER_TEMPLATE, { note: "n.md", date: "2026-01-01", comment: "//" });
+		const h2 = renderHeader(DEFAULT_HEADER_TEMPLATE, { note: "n.md", date: "2099-12-31", comment: "//" });
+		assert.notEqual(h1, h2);
+		assert.equal(writeArtifact(dest, h1, "same();\n", DEFAULT_MARKER).status, "written");
+		const firstBytes = fs.readFileSync(dest, "utf8");
+		assert.equal(writeArtifact(dest, h2, "same();\n", DEFAULT_MARKER).status, "unchanged");
+		assert.equal(fs.readFileSync(dest, "utf8"), firstBytes, "file must not be touched");
+		// A real body change still lands, and carries the new header.
+		assert.equal(writeArtifact(dest, h2, "different();\n", DEFAULT_MARKER).status, "written");
+		assert.match(fs.readFileSync(dest, "utf8"), /2099-12-31/);
+	});
+
+	test("stripGeneratedHeader recovers the body, and refuses on a foreign file", () => {
+		const h = renderHeader(DEFAULT_HEADER_TEMPLATE, { note: "n.md", date: "d", comment: "//" });
+		assert.equal(stripGeneratedHeader(h + "\n" + "body();\n", DEFAULT_MARKER), "body();\n");
+		assert.equal(stripGeneratedHeader("// human wrote this\n\nbody();\n", DEFAULT_MARKER), null);
+	});
+
 	test("an unwritable destination reports an error rather than throwing", () => {
-		const out = writeArtifact(path.join(tmp, "new.js", "impossible.js"), "x", DEFAULT_MARKER);
+		const out = writeArtifact(path.join(tmp, "new.js", "impossible.js"), header, "x", DEFAULT_MARKER);
 		assert.equal(out.status, "error");
 	});
 });
