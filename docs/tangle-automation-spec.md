@@ -78,26 +78,49 @@ These are the parts that need to hold, not the parts that are pleasant.
 5. **One source of truth, one direction.** Note → file, never back. The artifact is a build
    output; hand edits are lost by design, which rule 1 makes visible rather than surprising.
 
-## The perimeter question (needs a human decision before build)
+## Eligibility is a predicate, not a mode (ruled 2026-08-20)
 
-Tangling converts note content into **executable code on disk that `require()` will load**. Notes
-are agent-writable. So an unrestricted tangler creates a path from *"an agent wrote a note"* to
-*"a human runs a macro that executes that code"* — the same class of hazard that put
-`js-engine:*` and `quickadd:*` into Governor's opaque-execution deny set.
+**Opt in with a condition list, ANDed.** The plugin evaluates a small predicate over the note and
+tangles when every condition holds. Conditions are tag or frontmatter tests:
 
-Options, in increasing strictness:
+```yaml
+# plugin setting
+tangleWhen:
+  - tag: tangle
+  - property: acceptance-status
+    equals: accepted
+```
 
-- **A. Roots only** (rule 2 alone). Any `#tangle` note under a declared root tangles.
-- **B. Roots + status.** Additionally require the note to be `acceptance-status: accepted` — so a
-  human has blessed the code before it becomes executable. Uses the acceptance lifecycle already
-  in place, at the cost of a friction step while iterating.
-- **C. Roots + human-gesture.** Auto-tangle only for notes whose last modification was
-  human-attributed; agent-written changes require the manual command.
+The default is a single condition (`tag: tangle`). Everything else is the vault's decision,
+expressed as configuration — the plugin knows nothing about acceptance, governance, or any other
+vault convention; it only reads tags and frontmatter it was told to read.
 
-Recommendation: **A to start** (the roots are narrow, and the machinery folder is not somewhere
-agents routinely write), with **B available as a setting** for anyone wanting the stricter
-posture. Do not build C — the attribution signal lives in another plugin and the coupling is not
-worth it.
+This replaces the earlier A/B/C mode sketch. Modes would have hardcoded one vault's policy into a
+general plugin, and the strictest of them (C, human-gesture attribution) would have coupled this
+plugin to another one for a fuzzy, time-windowed signal. A predicate gets the same protection
+from data.
+
+### Why the acceptance condition is worth more than it looks
+
+Tangling turns note content into **executable code on disk that `require()` will load**, and notes
+are agent-writable — while no agent tool today writes `.js` at all (`obsidian_write_note` is
+`.md`-only; snippet writes are confined to `.obsidian/snippets`). So an unconditional tangler
+would be the first agent → executable-code path, which is the same hazard class that put
+`js-engine:*` and `quickadd:*` behind an opaque-execution deny set.
+
+Adding `acceptance-status: accepted` to the predicate closes most of it, because that field cannot
+be forged: the accepted family is in the guard's hardcoded floor and is refused on every agent
+transport. An agent-authored note therefore cannot certify itself into the tangle set.
+
+**The honest residual:** a note a human has already accepted keeps its `accepted` field across
+later edits, so a subsequent *agent* edit to that note still satisfies the predicate and tangles.
+The change surfaces in the review queue (content no longer matches the accepted baseline) — but
+after the write, not before. Closing that would require testing content against the accepted
+baseline, which is the governance plugin's fact to publish, not this plugin's to import. Deferred
+deliberately.
+
+**Unconditional rail, regardless of predicate:** writes stay inside the declared roots. Without
+that, a note is an arbitrary file-write primitive and no predicate matters.
 
 ## Out of scope
 
