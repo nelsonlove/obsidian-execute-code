@@ -38,6 +38,7 @@ import makeZigSettings from "./per-lang/makeZigSettings";
 import makeOCamlSettings from "./per-lang/makeOCamlSettings";
 import makeSwiftSettings from "./per-lang/makeSwiftSettings";
 import makeLispSettings from "./per-lang/makeLispSettings";
+import makeTangleSettings from "./makeTangleSettings";
 
 
 /**
@@ -139,6 +140,9 @@ export class SettingsTab extends PluginSettingTab {
 				})
 			)
 			.settingEl.style.borderTop = "0";
+
+		// ========== Tangling ==========
+		makeTangleSettings(this, containerEl);
 
 		makeJsSettings(this, this.makeContainerFor("js")); // JavaScript / Node
 		makeTsSettings(this, this.makeContainerFor("ts")); // TypeScript

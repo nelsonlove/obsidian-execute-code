@@ -1,6 +1,6 @@
 # Spec — tag-driven automatic tangling
 
-*Status: proposed (2026-08-20). Local spec for the `nelsonlove` patch line; not an upstream proposal.*
+*Status: IMPLEMENTED (2026-08-20), branch `feat/auto-tangle`. Local spec for the `nelsonlove` patch line; not an upstream proposal.*
 
 ## Why
 
@@ -38,11 +38,17 @@ frontmatter, which beats the central root. An override accepts:
 |---|---|---|
 | absolute | `/Users/me/x/lib.js` | as given |
 | home-relative | `~/x/lib.js` | `$HOME`-expanded (already implemented) |
-| vault-absolute | `/00-09 System/…/lib.js` | vault root + path |
+| vault-absolute | `vault:00-09 System/…/lib.js` | vault root + path |
 | vault-relative | `lib/flow.js` | relative to the **note's folder** (today's behavior — preserve it) |
 
-Vault-absolute is new and worth having: it is unambiguous, survives the note moving, and reads
-naturally to anyone who thinks in vault paths.
+Vault-absolute is new and worth having: it survives the note moving, and reads naturally to anyone
+who thinks in vault paths.
+
+**Implementation note — it takes an explicit `vault:` prefix, not a bare leading `/`.** This spec
+originally sketched it as `/00-09 System/…`, which is ambiguous with a real absolute path: both
+start with `/`, and the only way to tell them apart would be to probe the filesystem, making the
+meaning of a path depend on what happens to exist at the time. The `vault:` scheme is unambiguous
+and greppable, and it leaves the existing absolute-path behavior byte-identical.
 
 **Stamp every artifact.** A configurable header is prepended to each tangled file, with
 placeholders for the generator, the source note path, the note's `uid`, and the timestamp.

@@ -1,4 +1,6 @@
 import { LanguageId } from "src/main";
+import type { TangleSettings } from "../tangle/settings";
+import { DEFAULT_TANGLE_SETTINGS } from "../tangle/settings";
 
 /**
  * Interface that contains all the settings for the extension.
@@ -216,6 +218,9 @@ export interface ExecutorSettings {
 	ocamlInteractive: boolean;
 	phpInteractive: boolean;
 	lispInteractive: boolean;
+
+	/** Tangling — note content out to real files on disk. See src/tangle/. */
+	tangle: TangleSettings;
 }
 
 
@@ -434,4 +439,6 @@ export const DEFAULT_SETTINGS: ExecutorSettings = {
 	ocamlInteractive: false,
 	phpInteractive: false,
 	lispInteractive: false,
+
+	tangle: DEFAULT_TANGLE_SETTINGS,
 }

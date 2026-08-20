@@ -1,4 +1,4 @@
-import { App, Component, MarkdownRenderer, MarkdownView, Plugin, } from 'obsidian';
+import { App, Component, MarkdownRenderer, MarkdownView, Notice, Plugin, TFile, } from 'obsidian';
 
 import type { ExecutorSettings } from "./settings/Settings";
 import { DEFAULT_SETTINGS } from "./settings/Settings";
@@ -13,7 +13,7 @@ import ExecutorManagerView, {
 
 import runAllCodeBlocks from './runAllCodeBlocks';
 import runBlockUnderCursor from './runBlockUnderCursor';
-import tangleCurrentNote from './tangle';
+import tangleCurrentNote, { isEligible, summarize, tangleAll, tangleNote } from './tangle';
 import { ReleaseNoteModel } from "./ReleaseNoteModal";
 import * as runButton from './RunButton';
 
@@ -33,6 +33,8 @@ export interface PluginContext {
 export default class ExecuteCodePlugin extends Plugin {
 	settings: ExecutorSettings;
 	executors: ExecutorContainer;
+	/** Per-file debounce timers for the auto-tangle trigger (see wireAutoTangle). */
+	private tangleTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 	/**
 	 * Preparations for the plugin (adding buttons, html elements and event listeners).
@@ -81,7 +83,29 @@ export default class ExecuteCodePlugin extends Plugin {
 		this.addCommand({
 			id: "tangle-current-note",
 			name: "Tangle code blocks in current note",
-			callback: () => tangleCurrentNote(this.app)
+			callback: () => tangleCurrentNote(this.app, this.settings.tangle)
+		})
+
+		this.addCommand({
+			id: "tangle-all-notes",
+			name: "Tangle all eligible notes (and report orphans)",
+			callback: async () => {
+				const { reports, orphans } = await tangleAll(this.app, this.settings.tangle);
+				const written = reports.reduce(
+					(n, r) => n + r.outcomes.filter(o => o.status === "written").length, 0);
+				const problems = reports.flatMap(r => [
+					...r.refused.map(x => `${x.destination}: ${x.reason}`),
+					...r.outcomes.filter(o => o.status === "error" || o.status === "refused-foreign")
+						.map(o => `${o.destination}: ${o.detail}`),
+				]);
+				let msg = `Execute Code: tangled ${written} file(s) from ${reports.length} note(s).`;
+				// Orphans are REPORTED, never removed (rail 3) — deleting an artifact whose
+				// note stopped tangling is a human decision, not a sweep's.
+				if (orphans.length) msg += ` ${orphans.length} orphaned artifact(s) left in place: ${orphans.join(", ")}.`;
+				if (problems.length) msg += ` Refused: ${problems.join("; ")}.`;
+				new Notice(msg, problems.length || orphans.length ? 15000 : 6000);
+				console.info("Execute Code: tangle sweep", { written, notes: reports.length, orphans, problems });
+			}
 		})
 
 		this.addCommand({
@@ -104,6 +128,48 @@ export default class ExecuteCodePlugin extends Plugin {
 		}
 
 		applyLatexBodyClasses(this.app, this.settings);
+		this.wireAutoTangle();
+	}
+
+	/**
+	 * Auto-tangle on modify, debounced PER FILE.
+	 *
+	 * Per file rather than globally on purpose: one shared timer means editing note B
+	 * cancels note A's pending tangle, and A silently never lands. The eligibility check
+	 * runs on every event (it is a cache read, not a file read), so untagging a note
+	 * stops it tangling immediately rather than at the next reload.
+	 */
+	private wireAutoTangle() {
+		this.registerEvent(this.app.vault.on("modify", (file) => {
+			if (!this.settings.tangle.autoTangle) return;
+			if (!(file instanceof TFile) || file.extension !== "md") return;
+			if (!isEligible(this.app, file, this.settings.tangle)) return;
+
+			const pending = this.tangleTimers.get(file.path);
+			if (pending) clearTimeout(pending);
+			this.tangleTimers.set(file.path, setTimeout(async () => {
+				this.tangleTimers.delete(file.path);
+				try {
+					const report = await tangleNote(this.app, file, this.settings.tangle);
+					const problems = report.refused.length ||
+						report.outcomes.some(o => o.status === "error" || o.status === "refused-foreign");
+					// Quiet on success — an automatic trigger that notifies on every save is
+					// noise. Anything REFUSED is surfaced, because a silent refusal reads as
+					// a successful tangle and the stale artifact keeps being required.
+					if (problems) new Notice(`Execute Code: ${summarize(report)}.`, 12000);
+					else if (report.outcomes.some(o => o.status === "written"))
+						console.debug(`Execute Code: auto-tangled ${file.path} — ${summarize(report)}`);
+				} catch (e) {
+					new Notice(`Execute Code: auto-tangle of '${file.basename}' failed: ${e.message}`, 12000);
+				}
+			}, Math.max(250, this.settings.tangle.tangleDebounceMs)));
+		}));
+
+		// A pending tangle must not fire into a torn-down plugin.
+		this.register(() => {
+			for (const t of this.tangleTimers.values()) clearTimeout(t);
+			this.tangleTimers.clear();
+		});
 	}
 
 	/**
@@ -149,7 +215,13 @@ export default class ExecuteCodePlugin extends Plugin {
 	 * Loads the settings for this plugin from the corresponding save file and stores them in {@link settings}.
 	 */
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		const saved = await this.loadData();
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, saved);
+		// `tangle` is the one nested settings object, so the shallow merge above would
+		// replace it wholesale — a config saved by an older version would then be missing
+		// every key added since, including the rails' own settings (an absent `marker`
+		// disables the overwrite check). Merge the nested object on its own.
+		this.settings.tangle = Object.assign({}, DEFAULT_SETTINGS.tangle, saved?.tangle);
 		if (process.platform !== "win32") {
 			this.settings.wslMode = false;
 		}
