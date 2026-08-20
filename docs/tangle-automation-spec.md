@@ -136,6 +136,39 @@ deliberately.
 **Unconditional rail, regardless of predicate:** writes stay inside the declared roots. Without
 that, a note is an arbitrary file-write primitive and no predicate matters.
 
+## Which files should tangle (measured on the target vault, 2026-08-20)
+
+Tangling is for files something **loads by path**. It is actively wrong for files that a host
+executes out of the note itself, because those would gain a second copy that nothing runs — and an
+unrun copy drifts silently. That is not hypothetical: `SimpleEnglish redline.js` had diverged 314
+characters from `simple-english-redline.md` before anyone noticed, precisely because nothing
+executed it.
+
+The rule, and the evidence for it on this vault:
+
+| how the code runs | evidence | needs a `.js` |
+|---|---|---|
+| QuickAdd choice | all 37 entry points in `quickadd/data.json` name a `.md`; QuickAdd extracts the first js fence itself | **no** |
+| js-engine startup script | `js-engine/data.json` names `register-commands.js` and `sync-quickadd-choices.js` by path | **yes** |
+| `require()` | entry notes do `require(path.join(basePath, "…/flow.js"))`; libraries do `require(path.join(__dirname, "uuid7.js"))` | **yes** |
+
+So: **tangle a file iff something loads it by path.** A script the host runs from the note must not
+be tangled.
+
+### What this actually fixed
+
+The motivation above claims tangling relieves the hardcoded bootstrap literals in ~37 entry
+scripts. It does, but not by editing them — by **decoupling the artifact's location from the
+note's**. A note is eligible wherever it lives, and its artifact always lands in the central root.
+Verified by test: a `tangle: true` note created under `03 Agents/` wrote its `.js` into the
+configured root, not beside itself.
+
+The consequence is stronger than "one setting edit instead of N": the notes are now free to be
+refiled, renumbered, or split across scopes — the ordinary churn of a JD vault — without any
+literal breaking. What remains fragile is the tangle-root setting itself, which is a better shape
+(one deliberate setting) than a folder's incidental location, and can be removed entirely by
+pointing the root somewhere the numbering scheme never touches.
+
 ## Out of scope
 
 - Two-way sync (artifact → note).
