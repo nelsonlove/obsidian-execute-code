@@ -8,6 +8,7 @@ import {
 	isAllowedDestination,
 	isKnownLanguage,
 	resolveDestination,
+	resolveTangleRoot,
 	ResolveContext,
 } from "./resolve";
 import { looksGenerated } from "./header";
@@ -100,6 +101,9 @@ export function planTangle({ content, noteBasename, ctx, settings }: PlanInputs)
 	const byDestination = new Map<string, PlannedArtifact>();
 	const refused: { destination: string; reason: string }[] = [];
 	const roots = allowedRoots(settings, ctx);
+	// Block destinations resolve with the tangle root in scope, so a bare relative path
+	// lands INSIDE it. Roots themselves were resolved without it (see resolveTangleRoot).
+	const blockCtx: ResolveContext = { ...ctx, tangleRootAbs: resolveTangleRoot(settings.tangleRoot, ctx) };
 
 	for (const b of blocks) {
 		const explicit = b.args.tangle === undefined ? undefined : String(b.args.tangle).trim();
@@ -112,7 +116,7 @@ export function planTangle({ content, noteBasename, ctx, settings }: PlanInputs)
 		let destination: string;
 		try {
 			destination = explicit
-				? resolveDestination(explicit, ctx)
+				? resolveDestination(explicit, blockCtx)
 				: defaultDestination(noteBasename, b.language, settings.tangleRoot, ctx);
 		} catch (e) {
 			refused.push({ destination: explicit ?? "(central root)", reason: (e as Error).message });
@@ -150,7 +154,8 @@ export function allowedRoots(settings: TangleSettings, ctx: ResolveContext): str
 	for (const r of declared) {
 		if (!r || !r.trim()) continue;
 		try {
-			out.push(resolveDestination(r, { ...ctx, noteFolder: "" }));
+			// Roots resolve WITHOUT a root in scope — a root cannot be relative to itself.
+			out.push(resolveDestination(r, { ...ctx, noteFolder: "", tangleRootAbs: undefined }));
 		} catch {
 			/* a malformed root simply grants nothing */
 		}

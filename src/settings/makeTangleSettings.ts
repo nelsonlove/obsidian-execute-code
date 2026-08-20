@@ -42,7 +42,8 @@ export default function makeTangleSettings(tab: SettingsTab, containerEl: HTMLEl
 		.setName("Additional permitted roots")
 		.setDesc(
 			"One path per line. A block's explicit {tangle=\"…\"} may write into these as well as the " +
-			"tangle root. Anything outside every listed root is refused.",
+			"tangle root. Anything outside every listed root is refused. A bare path in a block " +
+			"(sub/lib.js) is relative to the tangle root; './lib.js' is relative to the note.",
 		)
 		.addTextArea((area) => {
 			area.inputEl.rows = 3;

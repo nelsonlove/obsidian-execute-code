@@ -39,12 +39,20 @@ frontmatter, which beats the central root. An override accepts:
 | absolute | `/Users/me/x/lib.js` | as given |
 | home-relative | `~/x/lib.js` | `$HOME`-expanded (already implemented) |
 | vault-absolute | `vault:00-09 System/…/lib.js` | vault root + path |
-| vault-relative | `lib/flow.js` | relative to the **note's folder** (today's behavior — preserve it) |
+| tangle-root-relative | `lib/flow.js` | inside the **tangle root** |
+| note-relative | `./lib/flow.js` | relative to the **note's folder** (explicit) |
 
 Vault-absolute is new and worth having: it survives the note moving, and reads naturally to anyone
 who thinks in vault paths.
 
-**Implementation note — it takes an explicit `vault:` prefix, not a bare leading `/`.** This spec
+**Implementation note 2 — a BARE relative path resolves inside the tangle root, not beside the
+note** (ruled 2026-08-20). The spec originally preserved upstream's note-relative reading, but
+"beside the note" is the arrangement this feature exists to get away from, so it was the least
+useful meaning for the most convenient syntax. Reading a bare path as a sub-path of the tangle root
+also means the common override form is structurally incapable of escaping the root. Note-relative
+is still reachable and now says so, with `./` or `../`.
+
+**Implementation note 1 — vault-absolute takes an explicit `vault:` prefix, not a bare leading `/`.** This spec
 originally sketched it as `/00-09 System/…`, which is ambiguous with a real absolute path: both
 start with `/`, and the only way to tell them apart would be to probe the filesystem, making the
 meaning of a path depend on what happens to exist at the time. The `vault:` scheme is unambiguous

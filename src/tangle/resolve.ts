@@ -16,23 +16,37 @@ export interface ResolveContext {
 	noteFolder: string;
 	/** Home directory, injected so `~` expansion is testable. */
 	homeDir?: string;
+	/**
+	 * The resolved central tangle root, which a BARE relative destination resolves
+	 * against. Absent while resolving the root SETTING itself — there is no root to be
+	 * relative to yet, so a bare root setting is read as vault-relative instead.
+	 */
+	tangleRootAbs?: string;
 }
 
 /**
  * Expand one destination string to an absolute filesystem path.
  *
- * Four forms, and the disambiguation matters:
+ * Five forms, and the disambiguation matters:
  *
  *   vault:00-09 System/x/lib.js   → vault root + path      (survives the note moving)
  *   ~/x/lib.js                    → home-relative
  *   /Users/me/x/lib.js            → filesystem-absolute
- *   lib/flow.js                   → relative to the NOTE'S FOLDER (pre-existing behavior)
+ *   lib/flow.js                   → inside the TANGLE ROOT
+ *   ./lib/flow.js                 → relative to the NOTE'S folder (explicit)
  *
- * The spec sketched vault-absolute as a bare leading `/` (`/00-09 System/…`). That is
- * ambiguous with a real absolute path — both start with `/`, and guessing between them
- * by probing the filesystem would make the meaning of a path depend on what happens to
- * exist. An explicit `vault:` scheme is unambiguous, greppable, and self-documenting,
- * and it leaves today's absolute-path behavior byte-identical.
+ * Two deliberate departures from the spec, both about ambiguity:
+ *
+ * 1. Vault-absolute takes an explicit `vault:` prefix rather than a bare leading `/`.
+ *    A bare `/00-09 System/…` is indistinguishable from a real absolute path, and the
+ *    only way to tell them apart would be to probe the filesystem — which would make
+ *    the meaning of a path depend on what happens to exist at the time.
+ *
+ * 2. A BARE relative path resolves inside the tangle root, not beside the note
+ *    (Nelson's ruling, 2026-08-20). An override is almost always "a sub-path of where
+ *    my artifacts live", and reading it that way means the common case cannot escape
+ *    the root at all. Note-relative is still reachable, but must now say so with `./`
+ *    or `../` — which is what those prefixes already mean everywhere else.
  */
 export function resolveDestination(target: string, ctx: ResolveContext): string {
 	const raw = target.trim();
@@ -50,7 +64,27 @@ export function resolveDestination(target: string, ctx: ResolveContext): string 
 
 	if (path.isAbsolute(raw)) return path.resolve(raw);
 
-	return path.resolve(ctx.vaultBase, ctx.noteFolder ?? "", raw);
+	// Explicitly note-relative — the one way to write beside the note.
+	if (/^\.\.?([\\/]|$)/.test(raw)) return path.resolve(ctx.vaultBase, ctx.noteFolder ?? "", raw);
+
+	// Bare relative: inside the tangle root. Falls back to the vault root only when there
+	// is no root yet, which is exactly the case of resolving the root setting itself.
+	return path.resolve(ctx.tangleRootAbs ?? ctx.vaultBase, raw);
+}
+
+/**
+ * Resolve the central tangle root from its setting string.
+ *
+ * Deliberately resolved with `tangleRootAbs` stripped: the root cannot be relative to
+ * itself, and leaving it in would let a bare root setting resolve against a stale value.
+ */
+export function resolveTangleRoot(tangleRoot: string, ctx: ResolveContext): string | undefined {
+	if (!tangleRoot || !tangleRoot.trim()) return undefined;
+	try {
+		return resolveDestination(tangleRoot, { ...ctx, noteFolder: "", tangleRootAbs: undefined });
+	} catch {
+		return undefined;
+	}
 }
 
 /**
@@ -136,6 +170,7 @@ export function commentTokenFor(language: string): string {
  * fragility this whole feature exists to remove.
  */
 export function defaultDestination(noteBasename: string, language: string, tangleRoot: string, ctx: ResolveContext): string {
-	const root = resolveDestination(tangleRoot, { ...ctx, noteFolder: "" });
+	const root = resolveTangleRoot(tangleRoot, ctx);
+	if (!root) throw new Error("no tangle root is configured, so there is no default destination");
 	return path.join(root, `${noteBasename}.${extensionFor(language)}`);
 }

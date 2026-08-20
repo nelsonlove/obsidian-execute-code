@@ -9,6 +9,7 @@ import * as path from "path";
 import { matchesConditions, normalizeTag } from "../src/tangle/predicate.ts";
 import {
 	resolveDestination, isWithin, isAllowedDestination, extensionFor, isKnownLanguage,
+	resolveTangleRoot,
 } from "../src/tangle/resolve.ts";
 import {
 	renderHeader, looksGenerated, DEFAULT_MARKER, DEFAULT_HEADER_TEMPLATE,
@@ -82,8 +83,30 @@ describe("destination resolution", () => {
 		assert.equal(resolveDestination("/tmp/x/lib.js", CTX), "/tmp/x/lib.js");
 	});
 
-	test("a bare relative path resolves against the NOTE'S folder (pre-existing behavior)", () => {
-		assert.equal(resolveDestination("out/flow.js", CTX), "/vault/notes/lib/out/flow.js");
+	test("a BARE relative path lands inside the tangle root", () => {
+		const ctx = { ...CTX, tangleRootAbs: "/vault/Scripts" };
+		assert.equal(resolveDestination("out/flow.js", ctx), "/vault/Scripts/out/flow.js");
+	});
+
+	test("./ and ../ are the explicit note-relative escape", () => {
+		const ctx = { ...CTX, tangleRootAbs: "/vault/Scripts" };
+		assert.equal(resolveDestination("./flow.js", ctx), "/vault/notes/lib/flow.js");
+		assert.equal(resolveDestination("../flow.js", ctx), "/vault/notes/flow.js");
+		// A name merely STARTING with a dot is a hidden file, not a relative prefix.
+		assert.equal(resolveDestination(".hidden.js", ctx), "/vault/Scripts/.hidden.js");
+	});
+
+	test("with no tangle root yet, a bare path is vault-relative (the root setting itself)", () => {
+		assert.equal(resolveDestination("Scripts/flow.js", CTX), "/vault/Scripts/flow.js");
+		assert.equal(resolveTangleRoot("Scripts", CTX), "/vault/Scripts");
+		assert.equal(resolveTangleRoot("vault:Scripts", CTX), "/vault/Scripts");
+		assert.equal(resolveTangleRoot("", CTX), undefined);
+	});
+
+	test("a root is never resolved relative to itself", () => {
+		// If `tangleRootAbs` leaked into root resolution, this would compound to
+		// /vault/Scripts/Scripts on every pass.
+		assert.equal(resolveTangleRoot("Scripts", { ...CTX, tangleRootAbs: "/vault/Scripts" }), "/vault/Scripts");
 	});
 
 	test("an empty destination is an error, not a write to the root", () => {
@@ -119,6 +142,30 @@ describe("rail 2 — containment", () => {
 		assert.equal(plan.artifacts.length, 0);
 		assert.equal(plan.refused.length, 1);
 		assert.match(plan.refused[0].reason, /outside every declared tangle root/);
+	});
+
+	test("a bare override cannot escape the tangle root", () => {
+		// This is the practical win of the bare-is-root-relative rule: the common override
+		// form is structurally incapable of naming somewhere outside the root.
+		const plan = planTangle({
+			content: '```js {tangle="sub/lib.js"}\nok()\n```\n',
+			noteBasename: "flow",
+			ctx: CTX,
+			settings: SETTINGS,
+		});
+		assert.deepEqual(plan.artifacts.map((a) => a.destination), ["/vault/Scripts/sub/lib.js"]);
+		assert.equal(plan.refused.length, 0);
+	});
+
+	test("an explicit ./ override outside the roots is still refused", () => {
+		const plan = planTangle({
+			content: '```js {tangle="./beside.js"}\nno()\n```\n',
+			noteBasename: "flow",
+			ctx: CTX,
+			settings: SETTINGS,
+		});
+		assert.equal(plan.artifacts.length, 0);
+		assert.equal(plan.refused.length, 1);
 	});
 
 	test("an additional root permits exactly that root", () => {
