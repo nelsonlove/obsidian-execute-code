@@ -4,35 +4,20 @@
 
 ## Why
 
-The vault's JavaScript machinery — `flow.js`, `paths.js`, `versioning.js`, and ~20 siblings in
-`00.12 Scripts/` — lives as bare `.js` files because `require()` only loads files from disk.
-That puts the vault's own logic outside the vault's benefits: it is not linkable, not taggable,
-not classifiable, not reviewable through the note lifecycle, and invisible to every query the
-vault can ask of itself.
+The vault's JavaScript machinery — `flow.js`, `paths.js`, `versioning.js`, and ~20 siblings in `00.12 Scripts/` — lives as bare `.js` files because `require()` only loads files from disk. That puts the vault's own logic outside the vault's benefits: it is not linkable, not taggable, not classifiable, not reviewable through the note lifecycle, and invisible to every query the vault can ask of itself.
 
-The plugin already tangles: a block carrying `{tangle="path"}` is written to that path, blocks
-sharing a target concatenate in note order, and noweb `<<label>>` references expand
-(`src/tangle.ts`). Two things are missing before that can carry real machinery:
+The plugin already tangles: a block carrying `{tangle="path"}` is written to that path, blocks sharing a target concatenate in note order, and noweb `<<label>>` references expand (`src/tangle.ts`). Two things are missing before that can carry real machinery:
 
-1. it fires only from a **manual command**, so a source note and its artifact drift the moment
-   someone forgets; and
-2. the destination is a **path literal per block**, which is the exact fragility the vault keeps
-   paying for — a folder move silently breaks every literal that named it (the `00.12 Scripts`
-   moves have already stranded one live sync script and left 20 entry scripts each carrying a
-   hardcoded bootstrap path).
+1. it fires only from a **manual command**, so a source note and its artifact drift the moment someone forgets; and
+2. the destination is a **path literal per block**, which is the exact fragility the vault keeps paying for — a folder move silently breaks every literal that named it (the `00.12 Scripts` moves have already stranded one live sync script and left 20 entry scripts each carrying a hardcoded bootstrap path).
 
 ## Shape
 
-**Opt in with a tag.** A note tangles iff it carries `#tangle`. The tag is the membership test —
-queryable, greppable, and visible in the note itself.
+**Opt in with a tag.** A note tangles iff it carries `#tangle`. The tag is the membership test — queryable, greppable, and visible in the note itself.
 
-**Resolve the destination centrally.** A single plugin setting (the *tangle root*) says where
-tangled artifacts land. Notes name no path at all in the common case; the output filename derives
-from the note's basename with the language's extension (`flow.md` → `flow.js`). A folder move
-becomes one setting edit rather than N note edits.
+**Resolve the destination centrally.** A single plugin setting (the *tangle root*) says where tangled artifacts land. Notes name no path at all in the common case; the output filename derives from the note's basename with the language's extension (`flow.md` → `flow.js`). A folder move becomes one setting edit rather than N note edits.
 
-**Overrides, most specific wins.** Per-block `{tangle="…"}` (already implemented) beats per-note
-frontmatter, which beats the central root. An override accepts:
+**Overrides, most specific wins.** Per-block `{tangle="…"}` (already implemented) beats per-note frontmatter, which beats the central root. An override accepts:
 
 | form | example | resolves to |
 |---|---|---|
@@ -42,25 +27,13 @@ frontmatter, which beats the central root. An override accepts:
 | tangle-root-relative | `lib/flow.js` | inside the **tangle root** |
 | note-relative | `./lib/flow.js` | relative to the **note's folder** (explicit) |
 
-Vault-absolute is new and worth having: it survives the note moving, and reads naturally to anyone
-who thinks in vault paths.
+Vault-absolute is new and worth having: it survives the note moving, and reads naturally to anyone who thinks in vault paths.
 
-**Implementation note 2 — a BARE relative path resolves inside the tangle root, not beside the
-note** (ruled 2026-08-20). The spec originally preserved upstream's note-relative reading, but
-"beside the note" is the arrangement this feature exists to get away from, so it was the least
-useful meaning for the most convenient syntax. Reading a bare path as a sub-path of the tangle root
-also means the common override form is structurally incapable of escaping the root. Note-relative
-is still reachable and now says so, with `./` or `../`.
+**Implementation note 2 — a BARE relative path resolves inside the tangle root, not beside the note** (ruled 2026-08-20). The spec originally preserved upstream's note-relative reading, but "beside the note" is the arrangement this feature exists to get away from, so it was the least useful meaning for the most convenient syntax. Reading a bare path as a sub-path of the tangle root also means the common override form is structurally incapable of escaping the root. Note-relative is still reachable and now says so, with `./` or `../`.
 
-**Implementation note 1 — vault-absolute takes an explicit `vault:` prefix, not a bare leading `/`.** This spec
-originally sketched it as `/00-09 System/…`, which is ambiguous with a real absolute path: both
-start with `/`, and the only way to tell them apart would be to probe the filesystem, making the
-meaning of a path depend on what happens to exist at the time. The `vault:` scheme is unambiguous
-and greppable, and it leaves the existing absolute-path behavior byte-identical.
+**Implementation note 1 — vault-absolute takes an explicit `vault:` prefix, not a bare leading `/`.** This spec originally sketched it as `/00-09 System/…`, which is ambiguous with a real absolute path: both start with `/`, and the only way to tell them apart would be to probe the filesystem, making the meaning of a path depend on what happens to exist at the time. The `vault:` scheme is unambiguous and greppable, and it leaves the existing absolute-path behavior byte-identical.
 
-**Stamp every artifact.** A configurable header is prepended to each tangled file, with
-placeholders for the generator, the source note path, the note's `uid`, and the timestamp.
-Default:
+**Stamp every artifact.** A configurable header is prepended to each tangled file, with placeholders for the generator, the source note path, the note's `uid`, and the timestamp. Default:
 
 ```js
 // GENERATED by obsidian-execute-code (tangle) from `<note path>` — do not edit.
@@ -69,33 +42,21 @@ Default:
 
 The header is not decoration. It is the **safety interlock**: see below.
 
-**Trigger automatically.** Tangle a `#tangle` note on `modify`, debounced (~2s, configurable) so
-it fires when typing settles rather than per keystroke. Keep the manual command. Add a
-**Tangle all** sweep for first runs and recovery.
+**Trigger automatically.** Tangle a `#tangle` note on `modify`, debounced (~2s, configurable) so it fires when typing settles rather than per keystroke. Keep the manual command. Add a **Tangle all** sweep for first runs and recovery.
 
 ## Safety rails
 
 These are the parts that need to hold, not the parts that are pleasant.
 
-1. **Never overwrite a file that lacks the header.** If the target exists and does not begin with
-   the configured header prefix, refuse and notify — a human wrote that file, and silently
-   clobbering hand-written code is unrecoverable. This single rule also makes an accidental
-   collision loud instead of destructive.
-2. **Refuse to write outside declared roots.** The central tangle root plus an explicit allowlist
-   of override roots. An unlisted absolute path refuses. Without this, a note is an arbitrary
-   file-write primitive.
-3. **Untagging or deleting a note does not delete its artifact.** Orphans are reported by the
-   *Tangle all* sweep (artifacts carrying our header whose source note no longer tangles), never
-   removed automatically. Deletion is a human act.
-4. **Atomic writes** — write a temp file and rename, so an interrupted tangle cannot leave a
-   half-written module that `require()` will happily load.
-5. **One source of truth, one direction.** Note → file, never back. The artifact is a build
-   output; hand edits are lost by design, which rule 1 makes visible rather than surprising.
+1. **Never overwrite a file that lacks the header.** If the target exists and does not begin with the configured header prefix, refuse and notify — a human wrote that file, and silently clobbering hand-written code is unrecoverable. This single rule also makes an accidental collision loud instead of destructive.
+2. **Refuse to write outside declared roots.** The central tangle root plus an explicit allowlist of override roots. An unlisted absolute path refuses. Without this, a note is an arbitrary file-write primitive.
+3. **Untagging or deleting a note does not delete its artifact.** Orphans are reported by the *Tangle all* sweep (artifacts carrying our header whose source note no longer tangles), never removed automatically. Deletion is a human act.
+4. **Atomic writes** — write a temp file and rename, so an interrupted tangle cannot leave a half-written module that `require()` will happily load.
+5. **One source of truth, one direction.** Note → file, never back. The artifact is a build output; hand edits are lost by design, which rule 1 makes visible rather than surprising.
 
 ## Eligibility is a predicate, not a mode (ruled 2026-08-20)
 
-**Opt in with a condition list, ANDed.** The plugin evaluates a small predicate over the note and
-tangles when every condition holds. Conditions are tag or frontmatter tests:
+**Opt in with a condition list, ANDed.** The plugin evaluates a small predicate over the note and tangles when every condition holds. Conditions are tag or frontmatter tests:
 
 ```yaml
 # plugin setting
@@ -105,44 +66,23 @@ tangleWhen:
     equals: accepted
 ```
 
-The default is a single condition (`tag: tangle`). Everything else is the vault's decision,
-expressed as configuration — the plugin knows nothing about acceptance, governance, or any other
-vault convention; it only reads tags and frontmatter it was told to read.
+The default is a single condition (`tag: tangle`). Everything else is the vault's decision, expressed as configuration — the plugin knows nothing about acceptance, governance, or any other vault convention; it only reads tags and frontmatter it was told to read.
 
-This replaces the earlier A/B/C mode sketch. Modes would have hardcoded one vault's policy into a
-general plugin, and the strictest of them (C, human-gesture attribution) would have coupled this
-plugin to another one for a fuzzy, time-windowed signal. A predicate gets the same protection
-from data.
+This replaces the earlier A/B/C mode sketch. Modes would have hardcoded one vault's policy into a general plugin, and the strictest of them (C, human-gesture attribution) would have coupled this plugin to another one for a fuzzy, time-windowed signal. A predicate gets the same protection from data.
 
 ### Why the acceptance condition is worth more than it looks
 
-Tangling turns note content into **executable code on disk that `require()` will load**, and notes
-are agent-writable — while no agent tool today writes `.js` at all (`obsidian_write_note` is
-`.md`-only; snippet writes are confined to `.obsidian/snippets`). So an unconditional tangler
-would be the first agent → executable-code path, which is the same hazard class that put
-`js-engine:*` and `quickadd:*` behind an opaque-execution deny set.
+Tangling turns note content into **executable code on disk that `require()` will load**, and notes are agent-writable — while no agent tool today writes `.js` at all (`obsidian_write_note` is `.md`-only; snippet writes are confined to `.obsidian/snippets`). So an unconditional tangler would be the first agent → executable-code path, which is the same hazard class that put `js-engine:*` and `quickadd:*` behind an opaque-execution deny set.
 
-Adding `acceptance-status: accepted` to the predicate closes most of it, because that field cannot
-be forged: the accepted family is in the guard's hardcoded floor and is refused on every agent
-transport. An agent-authored note therefore cannot certify itself into the tangle set.
+Adding `acceptance-status: accepted` to the predicate closes most of it, because that field cannot be forged: the accepted family is in the guard's hardcoded floor and is refused on every agent transport. An agent-authored note therefore cannot certify itself into the tangle set.
 
-**The honest residual:** a note a human has already accepted keeps its `accepted` field across
-later edits, so a subsequent *agent* edit to that note still satisfies the predicate and tangles.
-The change surfaces in the review queue (content no longer matches the accepted baseline) — but
-after the write, not before. Closing that would require testing content against the accepted
-baseline, which is the governance plugin's fact to publish, not this plugin's to import. Deferred
-deliberately.
+**The honest residual:** a note a human has already accepted keeps its `accepted` field across later edits, so a subsequent *agent* edit to that note still satisfies the predicate and tangles. The change surfaces in the review queue (content no longer matches the accepted baseline) — but after the write, not before. Closing that would require testing content against the accepted baseline, which is the governance plugin's fact to publish, not this plugin's to import. Deferred deliberately.
 
-**Unconditional rail, regardless of predicate:** writes stay inside the declared roots. Without
-that, a note is an arbitrary file-write primitive and no predicate matters.
+**Unconditional rail, regardless of predicate:** writes stay inside the declared roots. Without that, a note is an arbitrary file-write primitive and no predicate matters.
 
 ## Which files should tangle (measured on the target vault, 2026-08-20)
 
-Tangling is for files something **loads by path**. It is actively wrong for files that a host
-executes out of the note itself, because those would gain a second copy that nothing runs — and an
-unrun copy drifts silently. That is not hypothetical: `SimpleEnglish redline.js` had diverged 314
-characters from `simple-english-redline.md` before anyone noticed, precisely because nothing
-executed it.
+Tangling is for files something **loads by path**. It is actively wrong for files that a host executes out of the note itself, because those would gain a second copy that nothing runs — and an unrun copy drifts silently. That is not hypothetical: `SimpleEnglish redline.js` had diverged 314 characters from `simple-english-redline.md` before anyone noticed, precisely because nothing executed it.
 
 The rule, and the evidence for it on this vault:
 
@@ -152,39 +92,24 @@ The rule, and the evidence for it on this vault:
 | js-engine startup script | `js-engine/data.json` names `register-commands.js` and `sync-quickadd-choices.js` by path | **yes** |
 | `require()` | entry notes do `require(path.join(basePath, "…/flow.js"))`; libraries do `require(path.join(__dirname, "uuid7.js"))` | **yes** |
 
-So: **tangle a file iff something loads it by path.** A script the host runs from the note must not
-be tangled.
+So: **tangle a file iff something loads it by path.** A script the host runs from the note must not be tangled.
 
 ### What this actually fixed
 
-The motivation above claims tangling relieves the hardcoded bootstrap literals in ~37 entry
-scripts. It does, but not by editing them — by **decoupling the artifact's location from the
-note's**. A note is eligible wherever it lives, and its artifact always lands in the central root.
-Verified by test: a `tangle: true` note created under `03 Agents/` wrote its `.js` into the
-configured root, not beside itself.
+The motivation above claims tangling relieves the hardcoded bootstrap literals in ~37 entry scripts. It does, but not by editing them — by **decoupling the artifact's location from the note's**. A note is eligible wherever it lives, and its artifact always lands in the central root. Verified by test: a `tangle: true` note created under `03 Agents/` wrote its `.js` into the configured root, not beside itself.
 
-The consequence is stronger than "one setting edit instead of N": the notes are now free to be
-refiled, renumbered, or split across scopes — the ordinary churn of a JD vault — without any
-literal breaking. What remains fragile is the tangle-root setting itself, which is a better shape
-(one deliberate setting) than a folder's incidental location, and can be removed entirely by
-pointing the root somewhere the numbering scheme never touches.
+The consequence is stronger than "one setting edit instead of N": the notes are now free to be refiled, renumbered, or split across scopes — the ordinary churn of a JD vault — without any literal breaking. What remains fragile is the tangle-root setting itself, which is a better shape (one deliberate setting) than a folder's incidental location, and can be removed entirely by pointing the root somewhere the numbering scheme never touches.
 
 ## Out of scope
 
 - Two-way sync (artifact → note).
 - Tangling languages other than those the plugin already runs.
-- Anything that *executes* tangled output. Tangling writes files; running them stays with
-  whatever already runs them (QuickAdd, js-engine, Node).
+- Anything that *executes* tangled output. Tangling writes files; running them stays with whatever already runs them (QuickAdd, js-engine, Node).
 - Deleting artifacts.
 
 ## Notes for implementation
 
-- `parseNoteBlocks` / `resolveTanglePath` / `tangleCurrentNote` in `src/tangle.ts` are the seams;
-  the resolver grows the vault-absolute form and the central-root fallback, and the trigger is new
-  wiring in `main.ts` beside the existing command registration.
-- Settings additions: tangle root, override-root allowlist, header template, debounce ms, and the
-  optional accepted-only gate.
+- `parseNoteBlocks` / `resolveTanglePath` / `tangleCurrentNote` in `src/tangle.ts` are the seams; the resolver grows the vault-absolute form and the central-root fallback, and the trigger is new wiring in `main.ts` beside the existing command registration.
+- Settings additions: tangle root, override-root allowlist, header template, debounce ms, and the optional accepted-only gate.
 - Debounce per file, not globally, so editing two notes does not drop one's tangle.
-- The vault's first real consumer would be the `00.12 Scripts` library set: each `.js` becomes a
-  note carrying `#tangle`, and the 20 entry scripts' bootstrap literals become resolvable through
-  one central setting.
+- The vault's first real consumer would be the `00.12 Scripts` library set: each `.js` becomes a note carrying `#tangle`, and the 20 entry scripts' bootstrap literals become resolvable through one central setting.
