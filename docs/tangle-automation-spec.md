@@ -9,7 +9,7 @@ The vault's JavaScript machinery — `flow.js`, `paths.js`, `versioning.js`, and
 The plugin already tangles: a block carrying `{tangle="path"}` is written to that path, blocks sharing a target concatenate in note order, and noweb `<<label>>` references expand (`src/tangle.ts`). Two things are missing before that can carry real machinery:
 
 1. it fires only from a **manual command**, so a source note and its artifact drift the moment someone forgets; and
-2. the destination is a **path literal per block**, which is the exact fragility the vault keeps paying for — a folder move silently breaks every literal that named it (the `00.12 Scripts` moves have already stranded one live sync script and left 20 entry scripts each carrying a hardcoded bootstrap path).
+2. the destination is a **path literal per block**, which is fragile in the same way every hardcoded vault path is — a folder move silently breaks every literal that named it. The vault has one real instance of this class: relocating `00.12 Scripts/QuickAdd choices/` to `00.13 QuickAdd choices/` orphaned `sync-quickadd-choices.js`, whose hardcoded `FOLDER` constant still named the old location, and choice edits stopped syncing until someone noticed. Note what that case is and is not: a hardcoded path to a folder that moved. **`00.12 Scripts` itself has never moved** (created 2026-08-18, stable since), so the ~37 entry scripts carrying a bootstrap literal to it are a latent risk, not a realised one. Do not overstate this as motivation.
 
 ## Shape
 
