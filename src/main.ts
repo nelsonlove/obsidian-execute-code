@@ -132,18 +132,37 @@ export default class ExecuteCodePlugin extends Plugin {
 	}
 
 	/**
-	 * Auto-tangle on modify, debounced PER FILE.
+	 * Auto-tangle on modify and on create, debounced PER FILE.
 	 *
 	 * Per file rather than globally on purpose: one shared timer means editing note B
-	 * cancels note A's pending tangle, and A silently never lands. The eligibility check
-	 * runs on every event (it is a cache read, not a file read), so untagging a note
-	 * stops it tangling immediately rather than at the next reload.
+	 * cancels note A's pending tangle, and A silently never lands.
+	 *
+	 * The two events are NOT symmetric, and both asymmetries are load-bearing:
+	 *
+	 *  - Obsidian fires `create` for EVERY file while it builds its initial index, so an
+	 *    ungated create handler would tangle the entire vault on every launch. It is
+	 *    gated on `onLayoutReady`, which runs after that pass. (`onLayoutReady` takes a
+	 *    plain callback and returns no EventRef, so it cannot be unregistered — setting a
+	 *    boolean is safe to leave dangling, which is why the flag is all it does.)
+	 *
+	 *  - Eligibility is read from the metadata cache, which is NOT yet populated when
+	 *    `create` fires for a brand-new note. So the create path skips the pre-check and
+	 *    lets the debounced `tangleNote` decide — it re-checks internally and returns
+	 *    `eligible: false` harmlessly. Checking early here would make every new note fail
+	 *    the test and silently never tangle, which is exactly the bug this handler exists
+	 *    to fix.
 	 */
 	private wireAutoTangle() {
-		this.registerEvent(this.app.vault.on("modify", (file) => {
+		let indexReady = false;
+		this.app.workspace.onLayoutReady(() => { indexReady = true; });
+
+		const schedule = (file: unknown, fromCreate: boolean) => {
 			if (!this.settings.tangle.autoTangle) return;
+			if (fromCreate && !indexReady) return;
 			if (!(file instanceof TFile) || file.extension !== "md") return;
-			if (!isEligible(this.app, file, this.settings.tangle)) return;
+			// On modify the cache is warm, so pre-checking avoids arming a timer for every
+			// keystroke in every note. On create it is not — see the header.
+			if (!fromCreate && !isEligible(this.app, file, this.settings.tangle)) return;
 
 			const pending = this.tangleTimers.get(file.path);
 			if (pending) clearTimeout(pending);
@@ -163,7 +182,10 @@ export default class ExecuteCodePlugin extends Plugin {
 					new Notice(`Execute Code: auto-tangle of '${file.basename}' failed: ${e.message}`, 12000);
 				}
 			}, Math.max(250, this.settings.tangle.tangleDebounceMs)));
-		}));
+		};
+
+		this.registerEvent(this.app.vault.on("modify", (file) => schedule(file, false)));
+		this.registerEvent(this.app.vault.on("create", (file) => schedule(file, true)));
 
 		// A pending tangle must not fire into a torn-down plugin.
 		this.register(() => {
