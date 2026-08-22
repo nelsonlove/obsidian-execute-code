@@ -100,6 +100,24 @@ The motivation above claims tangling relieves the hardcoded bootstrap literals i
 
 The consequence is stronger than "one setting edit instead of N": the notes are now free to be refiled, renumbered, or split across scopes — the ordinary churn of a JD vault — without any literal breaking. What remains fragile is the tangle-root setting itself, which is a better shape (one deliberate setting) than a folder's incidental location, and can be removed entirely by pointing the root somewhere the numbering scheme never touches.
 
+## Every untagged block is concatenated — mark the ones that are not code
+
+A note's artifact is **every** `js` block in it, joined in note order. Anything that is not part of the library — a usage example, a call signature, a snippet in an Overview section — must say so:
+
+````
+```js {tangle="no"}
+ask(prompt, opts) -> Promise<{ text, structured, sessionId }>
+```
+````
+
+**This bites, and it bit on 2026-08-22.** `claude.md` grew a `### Contract` section holding one `js` fence with the signature above. Nothing marked it, so it was concatenated to the *front* of `claude.js`, `->` was a syntax error, and the module stopped loading — taking `simple-english-redline` down with it, silently, for about forty minutes. Nothing reported it: the tangle succeeded, the file was written, and only `require()` failed, at call time, in a different plugin.
+
+Two things follow.
+
+**Org-babel's `:tangle no` is NOT recognised.** Only `{tangle="no"}` is, because argument parsing comes from this plugin's existing `CodeBlockArgs`. That is a genuine trap given this document describes the feature as "org-babel style" — a note in this vault was written with `:tangle no` and silently tangled anyway. Supporting the `:key value` form is a small parser change and is the right fix; it is not done.
+
+**A tangler cannot validate what it writes, and should not try.** Rail 1 protects files the tangler did not author; nothing protects against a note that authors bad code. The artifact is only as correct as the note. Where that matters — a library other things `require()` — the check that catches it is loading the artifact, not tangling it.
+
 ## Out of scope
 
 - Two-way sync (artifact → note).
