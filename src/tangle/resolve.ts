@@ -63,8 +63,8 @@ export function resolveDestination(target: string, ctx: ResolveContext): string 
  *
  * Segment-boundary comparison, so `/roots/lib-evil` is NOT inside `/roots/lib`. Both
  * sides are resolved first, which collapses any `..` before the comparison rather than
- * after it. Equality counts as inside (a root named directly is within itself), though
- * a destination equal to a root is rejected elsewhere as "not a file".
+ * after it. Equality counts as inside (a root named directly is within itself); a
+ * destination that turns out to be a folder fails loudly at write time, not here.
  */
 export function isWithin(parent: string, child: string): boolean {
 	const p = path.resolve(parent);

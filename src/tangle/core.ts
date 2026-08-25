@@ -106,7 +106,7 @@ export interface PlanInputs {
  * decision (rail 2 included) is testable without a vault.
  *
  * A block's destination is the most specific one available: an explicit
- * `{tangle="…"}` beats the central root. `{tangle="no"}` excludes a block outright,
+ * `{tangle="…"}` beats the default destination. `{tangle="no"}` excludes a block outright,
  * which is how a note keeps illustrative or scratch blocks out of its artifact.
  */
 export function planTangle({ content, noteBasename, ctx, settings }: PlanInputs): TanglePlan {

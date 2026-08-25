@@ -96,8 +96,19 @@ describe("eligibility predicate", () => {
 		assert.equal(propertyConditionHolds({ key: "nope", op: "not-equals", value: "x" }, f), true);
 		assert.equal(propertyConditionHolds({ key: "nope", op: "exists" }, f), false);
 		assert.equal(propertyConditionHolds({ key: "nope", op: "not-exists" }, f), true);
-		// An empty comparison value matches nothing rather than everything.
+		// A BLANK comparison value fails the condition for EVERY value-using operator —
+		// including the negated ones, where `!matchesNothing` would otherwise read as
+		// matches-everything and silently un-gate eligibility mid-edit.
 		assert.equal(propertyConditionHolds({ key: "name", op: "contains", value: "" }, f), false);
+		assert.equal(propertyConditionHolds({ key: "name", op: "not-contains", value: "" }, f), false);
+		assert.equal(propertyConditionHolds({ key: "name", op: "not-equals", value: "" }, f), false);
+		assert.equal(propertyConditionHolds({ key: "name", op: "equals", value: "" }, f), false);
+		assert.equal(propertyConditionHolds({ key: "name", op: "equals", value: "  " }, f), false);
+		// The blank-equals hazards specifically: Number("") is 0, and "" equals "".
+		const zeroed = { tags: [], frontmatter: { n: 0, s: "" } };
+		assert.equal(propertyConditionHolds({ key: "n", op: "equals", value: "" }, zeroed), false);
+		assert.equal(propertyConditionHolds({ key: "s", op: "equals", value: "" }, zeroed), false);
+		assert.equal(propertyConditionHolds({ key: "missing", op: "not-contains", value: "" }, zeroed), false);
 		// An operator from a newer config version fails closed.
 		assert.equal(propertyConditionHolds({ key: "name", op: "regex", value: ".*" }, f), false);
 	});

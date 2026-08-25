@@ -79,11 +79,15 @@ export function propertyConditionHolds(condition: PropertyCondition, facts: Note
 	const present = actual !== undefined && actual !== null;
 	const value = condition.value ?? "";
 
+	if (condition.op === "exists") return present;
+	if (condition.op === "not-exists") return !present;
+
+	// Every remaining operator compares against `value`. A BLANK value is a half-built
+	// row, and it must fail for the negated operators too: `!matchesNothing` would read
+	// as matches-everything, silently un-gating eligibility mid-edit.
+	if (!value.trim()) return false;
+
 	switch (condition.op) {
-		case "exists":
-			return present;
-		case "not-exists":
-			return !present;
 		case "equals":
 			return equalsValue(actual, value);
 		// Absence satisfies the negative operators: a note WITHOUT the property does not
