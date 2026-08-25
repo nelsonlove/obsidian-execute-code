@@ -1,56 +1,64 @@
 import { Setting } from "obsidian";
 import type { SettingsTab } from "./SettingsTab";
-import { conditionsToText, textToConditions } from "../tangle/conditionText";
+import type { PropertyOp } from "../tangle/predicate";
+import { StringSuggest, vaultPropertyKeys, vaultTags } from "../tangle/suggest";
 
-/**
- * Settings for tangling — writing a note's code blocks out to real files.
- *
- * The eligibility predicate is edited as text (one condition per line) rather than as a
- * row-builder UI: it is a rarely-touched, security-relevant setting, and a text field
- * that round-trips exactly is easier to review than a widget that silently normalizes.
- */
+const OP_LABELS: Record<PropertyOp, string> = {
+	"equals": "equals",
+	"not-equals": "does not equal",
+	"contains": "contains",
+	"not-contains": "does not contain",
+	"starts-with": "starts with",
+	"ends-with": "ends with",
+	"exists": "exists",
+	"not-exists": "does not exist",
+};
+
+/** Settings for tangling — writing a note's code blocks out to real files. */
 export default function makeTangleSettings(tab: SettingsTab, containerEl: HTMLElement) {
 	containerEl.createEl("h3", { text: "Tangling" });
 	containerEl.createEl("p", {
 		text:
-			"Tangling writes a note's code blocks to files on disk. Those files are ordinary code that " +
-			"other tools will load and run, so the destination is restricted to the roots you declare " +
-			"below, and a file that this plugin did not generate is never overwritten.",
+			"Tangling writes a note's code blocks to files on disk. Destinations are inside the vault " +
+			"unless a folder below explicitly allows otherwise, and a file that this plugin did not " +
+			"generate is never overwritten.",
 		cls: "setting-item-description",
 	});
 
 	const settings = () => tab.plugin.settings.tangle;
 
 	new Setting(containerEl)
-		.setName("Tangle root")
+		.setName("Default destination")
 		.setDesc(
-			"Where artifacts land when a note names no destination. Accepts 'vault:Some/Folder', " +
-			"'~/dir', or an absolute path. Leave empty to disable tangling entirely — with no root " +
-			"declared, every destination is refused.",
+			"The folder artifacts land in when a block names no destination. A bare path is relative " +
+			"to the vault root; './generated' is relative to each note's own folder; '~/dir' and " +
+			"absolute paths need an allowed outside folder below. Empty means only blocks with an " +
+			"explicit destination tangle.",
 		)
 		.addText((text) =>
 			text
-				.setPlaceholder("vault:00-09 System/00 System management/00.12 Scripts")
-				.setValue(settings().tangleRoot)
+				.setPlaceholder("./generated")
+				.setValue(settings().defaultDestination)
 				.onChange(async (value) => {
-					settings().tangleRoot = value.trim();
+					settings().defaultDestination = value.trim();
 					await tab.plugin.saveSettings();
 				}),
 		);
 
 	new Setting(containerEl)
-		.setName("Additional permitted roots")
+		.setName("Allowed folders outside the vault")
 		.setDesc(
-			"One path per line. A block's explicit {tangle=\"…\"} may write into these as well as the " +
-			"tangle root. Anything outside every listed root is refused. A bare path in a block " +
-			"(sub/lib.js) is relative to the tangle root; './lib.js' is relative to the note.",
+			"One per line, '~/dir' or absolute. Destinations inside the vault are always allowed; a " +
+			"destination outside it is refused unless it is under one of these folders. Empty means " +
+			"nothing is ever written outside the vault.",
 		)
 		.addTextArea((area) => {
 			area.inputEl.rows = 3;
 			area
-				.setValue((settings().additionalRoots ?? []).join("\n"))
+				.setPlaceholder("~/repos/scripts")
+				.setValue((settings().allowedOutsideRoots ?? []).join("\n"))
 				.onChange(async (value) => {
-					settings().additionalRoots = value
+					settings().allowedOutsideRoots = value
 						.split("\n")
 						.map((l) => l.trim())
 						.filter(Boolean);
@@ -58,23 +66,102 @@ export default function makeTangleSettings(tab: SettingsTab, containerEl: HTMLEl
 				});
 		});
 
+	/* ------------------------------- Tangle when ------------------------------- */
+
 	new Setting(containerEl)
 		.setName("Tangle when")
 		.setDesc(
-			"Conditions a note must meet, ALL of them, before it tangles. One per line: " +
-			"'tag: tangle', 'property: acceptance-status = accepted', or 'property: some-field' for " +
-			"mere presence. Empty means nothing tangles.",
+			"A note tangles when it carries AT LEAST ONE of the listed tags and satisfies EVERY " +
+			"property condition. A section left empty imposes nothing — but if both are empty, " +
+			"nothing tangles.",
 		)
-		.addTextArea((area) => {
-			area.inputEl.rows = 3;
-			area
-				.setPlaceholder("tag: tangle\nproperty: acceptance-status = accepted")
-				.setValue(conditionsToText(settings().tangleWhen))
-				.onChange(async (value) => {
-					settings().tangleWhen = textToConditions(value);
-					await tab.plugin.saveSettings();
-				});
+		.setHeading();
+
+	const whenEl = containerEl.createDiv();
+	const save = () => tab.plugin.saveSettings();
+
+	const renderWhen = () => {
+		whenEl.empty();
+		const when = settings().tangleWhen;
+
+		when.tags.forEach((tag, i) => {
+			new Setting(whenEl)
+				.setName(i === 0 ? "Tags (any of)" : "")
+				.addText((text) => {
+					text.setPlaceholder("tangle")
+						.setValue(tag)
+						.onChange(async (value) => {
+							when.tags[i] = value.trim().replace(/^#+/, "");
+							await save();
+						});
+					new StringSuggest(tab.app, text.inputEl, () => vaultTags(tab.app));
+				})
+				.addExtraButton((btn) =>
+					btn.setIcon("cross").setTooltip("Remove tag").onClick(async () => {
+						when.tags.splice(i, 1);
+						await save();
+						renderWhen();
+					}),
+				);
 		});
+
+		when.properties.forEach((cond, i) => {
+			const valueless = cond.op === "exists" || cond.op === "not-exists";
+			const row = new Setting(whenEl).setName(i === 0 ? "Properties (all of)" : "");
+			row.addText((text) => {
+				text.setPlaceholder("property")
+					.setValue(cond.key)
+					.onChange(async (value) => {
+						cond.key = value.trim();
+						await save();
+					});
+				new StringSuggest(tab.app, text.inputEl, () => vaultPropertyKeys(tab.app));
+			});
+			row.addDropdown((drop) => {
+				for (const [op, label] of Object.entries(OP_LABELS)) drop.addOption(op, label);
+				drop.setValue(cond.op).onChange(async (value) => {
+					cond.op = value as PropertyOp;
+					await save();
+					renderWhen(); // the value box appears or disappears with the operator
+				});
+			});
+			if (!valueless)
+				row.addText((text) =>
+					text.setPlaceholder("value")
+						.setValue(cond.value ?? "")
+						.onChange(async (value) => {
+							cond.value = value;
+							await save();
+						}),
+				);
+			row.addExtraButton((btn) =>
+				btn.setIcon("cross").setTooltip("Remove condition").onClick(async () => {
+					when.properties.splice(i, 1);
+					await save();
+					renderWhen();
+				}),
+			);
+		});
+
+		new Setting(whenEl)
+			.addButton((btn) =>
+				btn.setButtonText("Add tag").onClick(async () => {
+					when.tags.push("");
+					await save();
+					renderWhen();
+				}),
+			)
+			.addButton((btn) =>
+				btn.setButtonText("Add property condition").onClick(async () => {
+					when.properties.push({ key: "", op: "equals", value: "" });
+					await save();
+					renderWhen();
+				}),
+			);
+	};
+	renderWhen();
+
+	/* ----------------------------- The rest, as before ----------------------------- */
 
 	new Setting(containerEl)
 		.setName("Tangle automatically on save")

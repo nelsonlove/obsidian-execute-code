@@ -8,7 +8,7 @@ import {
 	isAllowedDestination,
 	isKnownLanguage,
 	resolveDestination,
-	resolveTangleRoot,
+	resolveOutsideRoots,
 	ResolveContext,
 } from "./resolve";
 import { looksGenerated, stripGeneratedHeader } from "./header";
@@ -30,6 +30,23 @@ export interface ParsedBlock {
 	code: string;
 }
 
+/**
+ * Org-babel-style header argument on the fence line: ```js :tangle ./generated
+ *
+ * Only `:tangle` is recognized. The value is the next token — quoted when the path
+ * carries spaces (`:tangle "Script notes/lib.js"`). `:tangle no` excludes the block;
+ * `:tangle yes` (org's spelling for "to the default file") is the default behavior
+ * here, so it reads as no destination. The JSON5 form `{tangle="…"}` wins when both
+ * are present, being the more explicit spelling.
+ */
+export function parseOrgTangleArg(info: string): string | undefined {
+	const m = /(?:^|\s):tangle(?:\s+(?:"([^"]*)"|'([^']*)'|([^\s{}]+)))?(?=\s|$|\{)/.exec(info);
+	if (!m) return undefined;
+	const value = (m[1] ?? m[2] ?? m[3] ?? "").trim();
+	if (!value || /^yes$/i.test(value)) return undefined;
+	return value;
+}
+
 /** Parses every fenced code block in a note. */
 export function parseNoteBlocks(content: string): ParsedBlock[] {
 	const blocks: ParsedBlock[] = [];
@@ -47,6 +64,10 @@ export function parseNoteBlocks(content: string): ParsedBlock[] {
 			const info = m[3].trim();
 			language = info.split(/[\s{]/)[0];
 			args = info ? parseArgs(info).args : {};
+			if (args.tangle === undefined) {
+				const org = parseOrgTangleArg(info);
+				if (org !== undefined) args.tangle = org;
+			}
 			code = [];
 		} else if (m && inside && m[2].charAt(0) === fence.charAt(0) && m[3].trim() === "") {
 			blocks.push({ language, args, code: code.join("\n") + (code.length ? "\n" : "") });
@@ -100,35 +121,32 @@ export function planTangle({ content, noteBasename, ctx, settings }: PlanInputs)
 	const missing = new Set<string>();
 	const byDestination = new Map<string, PlannedArtifact>();
 	const refused: { destination: string; reason: string }[] = [];
-	const roots = allowedRoots(settings, ctx);
-	// Block destinations resolve with the tangle root in scope, so a bare relative path
-	// lands INSIDE it. Roots themselves were resolved without it (see resolveTangleRoot).
-	const blockCtx: ResolveContext = { ...ctx, tangleRootAbs: resolveTangleRoot(settings.tangleRoot, ctx) };
+	const outsideRoots = resolveOutsideRoots(settings.allowedOutsideRoots, ctx);
 
 	for (const b of blocks) {
 		const explicit = b.args.tangle === undefined ? undefined : String(b.args.tangle).trim();
 		if (explicit && /^(no|false|off)$/i.test(explicit)) continue;
-		// With no explicit destination a block only rides the central root if we know what
-		// to call the file — an unrecognized language has no extension we could pick
-		// without guessing, and guessing produces `.txt` modules nobody asked for.
+		// With no explicit destination a block only rides the default destination if we
+		// know what to call the file — an unrecognized language has no extension we could
+		// pick without guessing, and guessing produces `.txt` modules nobody asked for.
 		if (!explicit && !isKnownLanguage(b.language)) continue;
 
 		let destination: string;
 		try {
 			destination = explicit
-				? resolveDestination(explicit, blockCtx)
-				: defaultDestination(noteBasename, b.language, settings.tangleRoot, ctx);
+				? resolveDestination(explicit, ctx)
+				: defaultDestination(noteBasename, b.language, settings.defaultDestination, ctx);
 		} catch (e) {
-			refused.push({ destination: explicit ?? "(central root)", reason: (e as Error).message });
+			refused.push({ destination: explicit ?? "(default destination)", reason: (e as Error).message });
 			continue;
 		}
 
-		if (!isAllowedDestination(destination, roots)) {
+		if (!isAllowedDestination(destination, ctx, outsideRoots)) {
 			refused.push({
 				destination,
-				reason: roots.length
-					? "outside every declared tangle root"
-					: "no tangle roots are declared, so no destination is writable",
+				reason: outsideRoots.length
+					? "outside the vault and outside every allowed outside folder"
+					: "outside the vault, and no outside folders are allowed",
 			});
 			continue;
 		}
@@ -144,23 +162,13 @@ export function planTangle({ content, noteBasename, ctx, settings }: PlanInputs)
 }
 
 /**
- * The roots a destination may live in: the central tangle root plus the explicit
- * override allowlist. Resolved through the same function destinations are, so a root
- * written as `vault:…` or `~/…` means the same thing on both sides of the comparison.
+ * Where the orphan sweep looks for marker-carrying files: the vault. Outside roots are
+ * deliberately NOT swept — a grant like `~/repos` can be enormous, and files out there
+ * live under their own tools' management; walking them would be slow and presumptuous.
+ * An artifact tangled outside the vault is simply not orphan-tracked.
  */
-export function allowedRoots(settings: TangleSettings, ctx: ResolveContext): string[] {
-	const declared = [settings.tangleRoot, ...(settings.additionalRoots ?? [])];
-	const out: string[] = [];
-	for (const r of declared) {
-		if (!r || !r.trim()) continue;
-		try {
-			// Roots resolve WITHOUT a root in scope — a root cannot be relative to itself.
-			out.push(resolveDestination(r, { ...ctx, noteFolder: "", tangleRootAbs: undefined }));
-		} catch {
-			/* a malformed root simply grants nothing */
-		}
-	}
-	return out;
+export function sweepRoots(ctx: ResolveContext): string[] {
+	return [ctx.vaultBase];
 }
 
 export interface WriteOutcome {
@@ -240,7 +248,13 @@ export function summarize(report: TangleReport): string {
 	return msg;
 }
 
-/** Depth-limited directory walk. Symlinked directories are not followed. */
+/**
+ * Depth-limited directory walk. Symlinked directories are not followed, and DOT
+ * directories are skipped: the sweep now walks the vault itself, and `.obsidian`,
+ * `.git`, and `.trash` are full of files we must not read as ours — this plugin's own
+ * bundled `main.js` carries the marker literal, and without this skip the sweep would
+ * report it as an orphan.
+ */
 export function* walkFiles(dir: string, depth = 0): Generator<string> {
 	if (depth > 8) return;
 	let entries: fs.Dirent[];
@@ -251,7 +265,7 @@ export function* walkFiles(dir: string, depth = 0): Generator<string> {
 	}
 	for (const e of entries) {
 		const full = path.join(dir, e.name);
-		if (e.isDirectory()) yield* walkFiles(full, depth + 1);
+		if (e.isDirectory() && !e.name.startsWith(".")) yield* walkFiles(full, depth + 1);
 		else if (e.isFile()) yield full;
 	}
 }

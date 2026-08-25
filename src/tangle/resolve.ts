@@ -16,37 +16,23 @@ export interface ResolveContext {
 	noteFolder: string;
 	/** Home directory, injected so `~` expansion is testable. */
 	homeDir?: string;
-	/**
-	 * The resolved central tangle root, which a BARE relative destination resolves
-	 * against. Absent while resolving the root SETTING itself — there is no root to be
-	 * relative to yet, so a bare root setting is read as vault-relative instead.
-	 */
-	tangleRootAbs?: string;
 }
 
 /**
  * Expand one destination string to an absolute filesystem path.
  *
- * Five forms, and the disambiguation matters:
+ * Four forms, each unambiguous on its face:
  *
- *   vault:00-09 System/x/lib.js   → vault root + path      (survives the note moving)
- *   ~/x/lib.js                    → home-relative
- *   /Users/me/x/lib.js            → filesystem-absolute
- *   lib/flow.js                   → inside the TANGLE ROOT
- *   ./lib/flow.js                 → relative to the NOTE'S folder (explicit)
+ *   Scripts/lib.js       → vault root + path       (survives the note moving)
+ *   ./lib/flow.js        → relative to the NOTE'S folder
+ *   ~/x/lib.js           → home-relative           (outside the vault — gated)
+ *   /Users/me/x/lib.js   → filesystem-absolute     (outside the vault — gated)
  *
- * Two deliberate departures from the spec, both about ambiguity:
- *
- * 1. Vault-absolute takes an explicit `vault:` prefix rather than a bare leading `/`.
- *    A bare `/00-09 System/…` is indistinguishable from a real absolute path, and the
- *    only way to tell them apart would be to probe the filesystem — which would make
- *    the meaning of a path depend on what happens to exist at the time.
- *
- * 2. A BARE relative path resolves inside the tangle root, not beside the note
- *    (Nelson's ruling, 2026-08-20). An override is almost always "a sub-path of where
- *    my artifacts live", and reading it that way means the common case cannot escape
- *    the root at all. Note-relative is still reachable, but must now say so with `./`
- *    or `../` — which is what those prefixes already mean everywhere else.
+ * A BARE path is vault-relative. That makes the common case structurally unable to
+ * leave the vault, and it is why a bare leading `/` can safely mean a real absolute
+ * path — the two are no longer competing for the same spelling. The legacy `vault:`
+ * prefix is still accepted as an alias for the bare form, so old block args keep
+ * meaning what they meant.
  */
 export function resolveDestination(target: string, ctx: ResolveContext): string {
 	const raw = target.trim();
@@ -64,27 +50,12 @@ export function resolveDestination(target: string, ctx: ResolveContext): string 
 
 	if (path.isAbsolute(raw)) return path.resolve(raw);
 
-	// Explicitly note-relative — the one way to write beside the note.
+	// Explicitly note-relative. A name merely STARTING with a dot (`.hidden.js`) is a
+	// hidden file, not a relative prefix.
 	if (/^\.\.?([\\/]|$)/.test(raw)) return path.resolve(ctx.vaultBase, ctx.noteFolder ?? "", raw);
 
-	// Bare relative: inside the tangle root. Falls back to the vault root only when there
-	// is no root yet, which is exactly the case of resolving the root setting itself.
-	return path.resolve(ctx.tangleRootAbs ?? ctx.vaultBase, raw);
-}
-
-/**
- * Resolve the central tangle root from its setting string.
- *
- * Deliberately resolved with `tangleRootAbs` stripped: the root cannot be relative to
- * itself, and leaving it in would let a bare root setting resolve against a stale value.
- */
-export function resolveTangleRoot(tangleRoot: string, ctx: ResolveContext): string | undefined {
-	if (!tangleRoot || !tangleRoot.trim()) return undefined;
-	try {
-		return resolveDestination(tangleRoot, { ...ctx, noteFolder: "", tangleRootAbs: undefined });
-	} catch {
-		return undefined;
-	}
+	// Bare relative: inside the vault.
+	return path.resolve(ctx.vaultBase, raw);
 }
 
 /**
@@ -104,20 +75,39 @@ export function isWithin(parent: string, child: string): boolean {
 }
 
 /**
- * RAIL 2 — refuse to write outside the declared roots.
+ * Expand the configured outside-the-vault folders to absolute paths.
  *
- * Without this a note is an arbitrary file-write primitive: any `{tangle="…"}` string
- * in any eligible note would be honored, and eligible notes are agent-writable. This is
- * the rail that holds regardless of how permissive the eligibility predicate is, so it
- * must never be made conditional on the predicate.
- *
- * An EMPTY root list denies everything. Same reasoning as the empty predicate: the
- * reading that would be convenient ("unrestricted") turns a misconfiguration into an
- * unrestricted file-write primitive.
+ * Entries are `~/…` or absolute. A relative entry would be inside the vault — where
+ * writes are already permitted — so it grants nothing and is dropped rather than
+ * guessed at.
  */
-export function isAllowedDestination(destination: string, roots: string[]): boolean {
-	if (!roots || roots.length === 0) return false;
-	return roots.some((r) => r && r.trim() && isWithin(r, destination));
+export function resolveOutsideRoots(allowedOutsideRoots: string[] | undefined, ctx: ResolveContext): string[] {
+	const out: string[] = [];
+	for (const r of allowedOutsideRoots ?? []) {
+		if (!r || !r.trim()) continue;
+		try {
+			const abs = resolveDestination(r, { ...ctx, noteFolder: "" });
+			if (!isWithin(ctx.vaultBase, abs)) out.push(abs);
+		} catch {
+			/* a malformed entry simply grants nothing */
+		}
+	}
+	return out;
+}
+
+/**
+ * RAIL 2 — the vault is the sandbox; leaving it takes an explicit grant.
+ *
+ * A destination inside the vault is always writable (rail 1 still refuses to overwrite
+ * files we did not generate). A destination OUTSIDE the vault is writable only inside
+ * one of the folders the user listed in settings. Without this a note would be an
+ * arbitrary file-write primitive: any `{tangle="~/…"}` string in any eligible note
+ * would be honored, and eligible notes are agent-writable. An EMPTY outside list
+ * therefore refuses every outside write — opt in, never out.
+ */
+export function isAllowedDestination(destination: string, ctx: ResolveContext, outsideRootsAbs: string[]): boolean {
+	if (isWithin(ctx.vaultBase, destination)) return true;
+	return (outsideRootsAbs ?? []).some((r) => r && r.trim() && isWithin(r, destination));
 }
 
 /** Language → the file extension a tangled artifact of that language gets. */
@@ -142,8 +132,8 @@ export function extensionFor(language: string): string {
 /**
  * Do we know what to CALL a file of this language?
  *
- * Gates the central-root path only. A block with an explicit `{tangle="…"}` names its
- * own filename and needs no mapping; a block relying on the central root does, and
+ * Gates the default-destination path only. A block with an explicit `{tangle="…"}`
+ * names its own filename and needs no mapping; a block relying on the default does, and
  * falling back to `.txt` would silently produce artifacts nobody asked for.
  */
 export function isKnownLanguage(language: string): boolean {
@@ -164,13 +154,15 @@ export function commentTokenFor(language: string): string {
 }
 
 /**
- * The default destination when a note names none: the central root plus the note's own
- * basename with the language's extension (`flow.md` carrying js blocks → `flow.js`).
- * A folder move then becomes ONE setting edit rather than N note edits, which is the
- * fragility this whole feature exists to remove.
+ * The destination when a note names none: the configured default folder plus the
+ * note's own basename with the language's extension (`flow.md` carrying js blocks →
+ * `flow.js`). The folder may itself be note-relative (`./generated` beside a note in
+ * `Script notes/` lands in `Script notes/generated/`), which is why it resolves with
+ * the note's context rather than once at startup.
  */
-export function defaultDestination(noteBasename: string, language: string, tangleRoot: string, ctx: ResolveContext): string {
-	const root = resolveTangleRoot(tangleRoot, ctx);
-	if (!root) throw new Error("no tangle root is configured, so there is no default destination");
-	return path.join(root, `${noteBasename}.${extensionFor(language)}`);
+export function defaultDestination(noteBasename: string, language: string, defaultFolder: string, ctx: ResolveContext): string {
+	if (!defaultFolder || !defaultFolder.trim())
+		throw new Error("no default tangle destination is configured, so a block without an explicit one has nowhere to go");
+	const folder = resolveDestination(defaultFolder, ctx);
+	return path.join(folder, `${noteBasename}.${extensionFor(language)}`);
 }
