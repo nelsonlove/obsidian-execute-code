@@ -12,6 +12,7 @@ import {
 	ResolveContext,
 } from "./resolve";
 import { looksGenerated, stripGeneratedHeader } from "./header";
+import { docstringRange } from "./docstring";
 import type { TangleSettings } from "./settings";
 
 /**
@@ -28,6 +29,8 @@ export interface ParsedBlock {
 	language: string;
 	args: CodeBlockArgs;
 	code: string;
+	/** Line index (0-based, split on \n) of the block's opening fence. */
+	line: number;
 }
 
 /**
@@ -55,12 +58,16 @@ export function parseNoteBlocks(content: string): ParsedBlock[] {
 	let language = "";
 	let args: CodeBlockArgs = {};
 	let code: string[] = [];
+	let opener = 0;
 
-	for (const line of content.split("\n")) {
+	const lines = content.split("\n");
+	for (let i = 0; i < lines.length; i++) {
+		const line = lines[i];
 		const m = line.match(/^(\s*)(`{3,}|~{3,})\s*(.*)$/);
 		if (m && !inside) {
 			inside = true;
 			fence = m[2];
+			opener = i;
 			const info = m[3].trim();
 			language = info.split(/[\s{]/)[0];
 			args = info ? parseArgs(info).args : {};
@@ -70,7 +77,7 @@ export function parseNoteBlocks(content: string): ParsedBlock[] {
 			}
 			code = [];
 		} else if (m && inside && m[2].charAt(0) === fence.charAt(0) && m[3].trim() === "") {
-			blocks.push({ language, args, code: code.join("\n") + (code.length ? "\n" : "") });
+			blocks.push({ language, args, code: code.join("\n") + (code.length ? "\n" : ""), line: opener });
 			inside = false;
 		} else if (inside) {
 			code.push(line);
@@ -122,10 +129,20 @@ export function planTangle({ content, noteBasename, ctx, settings }: PlanInputs)
 	const byDestination = new Map<string, PlannedArtifact>();
 	const refused: { destination: string; reason: string }[] = [];
 	const outsideRoots = resolveOutsideRoots(settings.allowedOutsideRoots, ctx);
+	const docRange = settings.docstringHeading?.trim()
+		? docstringRange(content, settings.docstringHeading)
+		: undefined;
 
 	for (const b of blocks) {
 		const explicit = b.args.tangle === undefined ? undefined : String(b.args.tangle).trim();
 		if (explicit && /^(no|false|off)$/i.test(explicit)) continue;
+		// A fence inside the docstring section is an EXAMPLE, not code — it is already
+		// rendered into the artifact as commented prose, and concatenating it as a real
+		// chunk is exactly the multi-block failure recorded at fa3fdf5 (an untagged
+		// signature sketch broke claude.js). An explicit destination overrides: naming a
+		// target is unambiguous authorial intent. Labels still collect above, so an
+		// example block can be noweb-referenced either way.
+		if (docRange && !explicit && b.line >= docRange.start && b.line < docRange.end) continue;
 		// With no explicit destination a block only rides the default destination if we
 		// know what to call the file — an unrecognized language has no extension we could
 		// pick without guessing, and guessing produces `.txt` modules nobody asked for.

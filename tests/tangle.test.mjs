@@ -447,8 +447,38 @@ describe("docstring", () => {
 		const doc = extractDocstring(NOTE, "Docstring");
 		assert.match(doc, /Handles the flow\./);
 		assert.match(doc, /still part of the docstring section/);
+		// A DEEPER heading is structure the author wrote — kept verbatim, not dropped.
+		assert.match(doc, /### Detail/);
 		assert.doesNotMatch(doc, /not docstring/);
 		assert.doesNotMatch(doc, /intro text/);
+	});
+
+	test("fences inside the docstring section are examples: not tangled unless explicitly targeted", () => {
+		const note = [
+			"## Docstring",
+			"Usage:",
+			"```js",
+			"example();",
+			"```",
+			'```js {tangle="Scripts/wanted.js"}',
+			"deliberate();",
+			"```",
+			"## Code",
+			"```js",
+			"real();",
+			"```",
+		].join("\n");
+		const plan = planTangle({ content: note, noteBasename: "flow", ctx: CTX, settings: SETTINGS });
+		const all = plan.artifacts.flatMap((a) => a.chunks).join("");
+		assert.doesNotMatch(all, /example\(\)/); // untagged example stays prose
+		assert.match(all, /deliberate\(\)/); // explicit destination overrides
+		assert.match(all, /real\(\)/); // outside the section, business as usual
+		// With the docstring feature off, the example fence tangles like any block.
+		const off = planTangle({
+			content: note, noteBasename: "flow", ctx: CTX,
+			settings: { ...SETTINGS, docstringHeading: "" },
+		});
+		assert.match(off.artifacts.flatMap((a) => a.chunks).join(""), /example\(\)/);
 	});
 
 	test("heading match is case-insensitive; absence and blank sections yield undefined", () => {
