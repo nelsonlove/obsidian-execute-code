@@ -809,6 +809,8 @@ Blocks with a `tangle` argument can be exported to source files with the **Tangl
 
 Which notes tangle at all is controlled by the "Tangle when" settings: a note qualifies when it carries at least one of the listed tags and satisfies every property condition (operators: equals, contains, starts with, ends with, exists, and their negations).
 
+If the note has a heading matching the "Docstring heading" setting (default `Docstring`), that heading's section is rendered as a comment block below the generated-file header in every artifact the note tangles — a docstring sourced from your prose. Editing the section re-tangles the files.
+
 For tangling, labels are shared across the whole note regardless of language; for running, references resolve against labelled blocks of the same language.
 
 ### Cross-Block Variables
