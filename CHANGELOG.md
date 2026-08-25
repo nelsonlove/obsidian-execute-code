@@ -7,6 +7,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## Fork releases (nelsonlove/obsidian-execute-code)
 
+## [2.1.18] - 2026-08-25 (fork)
+
+Tangling destinations are now anchored to the vault root, and the eligibility settings got a structured UI. (The tangle machinery itself — automatic tag-driven tangling with safety rails — landed unversioned after 2.1.17; this release reshapes its settings.)
+
+### Added
+- Org-babel fence syntax: ` ```js :tangle ./generated ` (quoted paths allowed; `:tangle no` excludes a block; `{tangle="…"}` wins when both are present)
+- "Default destination" setting — the folder blocks without an explicit destination land in; may be note-relative (`./generated`)
+- "Allowed folders outside the vault" setting — the only door out of the vault; empty means outside writes are refused
+- "Tangle when" is now a structured editor: a tag list (any-of, with a tag suggester) plus property conditions (all-of) with key suggester and operators equals / does not equal / contains / does not contain / starts with / ends with / exists / does not exist
+
+### Changed
+- **Breaking:** a bare `{tangle="path"}` is now vault-root-relative (it used to resolve inside the tangle root). `./path` stays note-relative; `~` and absolute paths now require an allowed outside folder.
+- The "Tangle root" and "Additional permitted roots" settings are gone. Saved settings migrate automatically: the root becomes the default destination, and legacy roots outside the vault carry over into the outside-folder list.
+- The orphan sweep now walks the vault (skipping dot-directories and markdown files); artifacts tangled outside the vault are no longer orphan-tracked.
+
 ## [2.1.16] - 2026-07-11 (fork)
 ### Added
 - Cross-block variables: `{var={x="label"}}` binds a block's saved results to a variable (lisp/python/js), like org-babel's `:var`

@@ -1,23 +1,40 @@
 /**
  * Eligibility — "may this note tangle?" — as DATA, not as built-in modes.
  *
- * The plugin evaluates a list of conditions and tangles only when every one holds.
- * It knows nothing about what the conditions MEAN: `acceptance-status: accepted`
- * is just a frontmatter comparison here, and the fact that some other plugin makes
- * that field unforgeable is the vault's business, not this module's. That is the
- * whole point — a general tangler must not hardcode one vault's governance model.
+ * The plugin evaluates a predicate and tangles only when it holds. It knows nothing
+ * about what the conditions MEAN: `acceptance-status equals accepted` is just a
+ * frontmatter comparison here, and the fact that some other plugin makes that field
+ * unforgeable is the vault's business, not this module's. That is the whole point — a
+ * general tangler must not hardcode one vault's governance model.
  */
 
-export type TangleCondition =
-	/** The note carries this tag (with or without a leading `#`; nested tags match exactly). */
-	| { tag: string }
-	/** Frontmatter test: `equals` compares the value, `exists` only asserts presence. */
-	| { property: string; equals?: unknown; exists?: boolean };
+/** The operators a property condition can use. Mirrors the set Bases filters offer. */
+export type PropertyOp =
+	| "equals"
+	| "not-equals"
+	| "contains"
+	| "not-contains"
+	| "starts-with"
+	| "ends-with"
+	| "exists"
+	| "not-exists";
 
-export interface NoteFacts {
-	/** Every tag on the note — frontmatter and inline — WITHOUT a leading `#`. */
+export interface PropertyCondition {
+	/** Frontmatter key. */
+	key: string;
+	op: PropertyOp;
+	/** Compared value, as typed. Ignored by `exists` / `not-exists`. */
+	value?: string;
+}
+
+/**
+ * The whole predicate: a note is eligible when it carries AT LEAST ONE of the listed
+ * tags (any-of) AND satisfies EVERY property condition (all-of). A section left empty
+ * imposes nothing — but if BOTH are empty, nothing tangles (see `matchesPredicate`).
+ */
+export interface TanglePredicate {
 	tags: string[];
-	frontmatter: Record<string, unknown>;
+	properties: PropertyCondition[];
 }
 
 /** `#Foo/Bar` and `foo/bar` are the same tag. Obsidian tags are case-insensitive. */
@@ -25,47 +42,90 @@ export function normalizeTag(tag: string): string {
 	return tag.trim().replace(/^#+/, "").toLowerCase();
 }
 
-/**
- * Compare a frontmatter value to a configured one.
- *
- * Loose on SHAPE (a single value matches a one-element list, because YAML authors
- * write both for the same intent) and loose on string case, but never loose about
- * absence: `undefined` and `null` match nothing, so a missing property can never
- * satisfy an `equals` condition.
- */
-function valueMatches(actual: unknown, expected: unknown): boolean {
-	if (actual === undefined || actual === null) return false;
-	if (Array.isArray(actual)) return actual.some((v) => valueMatches(v, expected));
-	if (typeof actual === "string" && typeof expected === "string")
-		return actual.trim().toLowerCase() === expected.trim().toLowerCase();
-	return actual === expected;
+export interface NoteFacts {
+	/** Every tag on the note — frontmatter and inline — WITHOUT a leading `#`. */
+	tags: string[];
+	frontmatter: Record<string, unknown>;
 }
 
-export function conditionHolds(condition: TangleCondition, facts: NoteFacts): boolean {
-	if ("tag" in condition) {
-		const want = normalizeTag(condition.tag);
-		if (!want) return false; // an empty tag condition matches nothing, never everything
-		return facts.tags.some((t) => normalizeTag(t) === want);
-	}
-	const key = condition.property?.trim();
+/**
+ * The configured value is typed as text; the frontmatter value is whatever YAML gave
+ * us. `equals` coerces the text toward the actual value's type (so `3` matches the
+ * number 3 and `true` matches the boolean), and string comparison is case-insensitive.
+ */
+function equalsValue(actual: unknown, expected: string): boolean {
+	if (actual === undefined || actual === null) return false;
+	if (Array.isArray(actual)) return actual.some((v) => equalsValue(v, expected));
+	const want = expected.trim().replace(/^['"]|['"]$/g, "");
+	if (typeof actual === "boolean") return /^(true|false)$/i.test(want) && actual === /^true$/i.test(want);
+	if (typeof actual === "number") return Number.isFinite(Number(want)) && actual === Number(want);
+	if (typeof actual === "string") return actual.trim().toLowerCase() === want.toLowerCase();
+	return false;
+}
+
+/** Substring-family comparison: everything is compared as lowercase text. */
+function textMatches(actual: unknown, expected: string, test: (a: string, e: string) => boolean): boolean {
+	if (actual === undefined || actual === null) return false;
+	if (Array.isArray(actual)) return actual.some((v) => textMatches(v, expected, test));
+	return test(String(actual).trim().toLowerCase(), expected.trim().toLowerCase());
+}
+
+export function propertyConditionHolds(condition: PropertyCondition, facts: NoteFacts): boolean {
+	const key = condition.key?.trim();
+	// A half-built row (no key yet) must FAIL, not vanish: vanishing would widen what
+	// tangles mid-edit, which is the dangerous direction.
 	if (!key) return false;
 	const actual = facts.frontmatter?.[key];
-	if (condition.exists !== undefined)
-		return condition.exists ? actual !== undefined && actual !== null : actual === undefined || actual === null;
-	if (condition.equals !== undefined) return valueMatches(actual, condition.equals);
-	// A bare {property} with neither `equals` nor `exists` reads as "must be present".
-	return actual !== undefined && actual !== null;
+	const present = actual !== undefined && actual !== null;
+	const value = condition.value ?? "";
+
+	if (condition.op === "exists") return present;
+	if (condition.op === "not-exists") return !present;
+
+	// Every remaining operator compares against `value`. A BLANK value is a half-built
+	// row, and it must fail for the negated operators too: `!matchesNothing` would read
+	// as matches-everything, silently un-gating eligibility mid-edit.
+	if (!value.trim()) return false;
+
+	switch (condition.op) {
+		case "equals":
+			return equalsValue(actual, value);
+		// Absence satisfies the negative operators: a note WITHOUT the property does not
+		// carry the excluded value.
+		case "not-equals":
+			return !equalsValue(actual, value);
+		case "contains":
+			return textMatches(actual, value, (a, e) => e !== "" && a.includes(e));
+		case "not-contains":
+			return !textMatches(actual, value, (a, e) => e !== "" && a.includes(e));
+		case "starts-with":
+			return textMatches(actual, value, (a, e) => e !== "" && a.startsWith(e));
+		case "ends-with":
+			return textMatches(actual, value, (a, e) => e !== "" && a.endsWith(e));
+		default:
+			// An operator this build does not know (config written by a newer version)
+			// fails closed rather than matching everything.
+			return false;
+	}
 }
 
 /**
- * Every condition must hold (AND).
+ * Evaluate the whole predicate.
  *
- * FAILS CLOSED on an empty list. An empty predicate reads naturally as "no
- * constraints", which for a vacuous AND would mean EVERY note tangles — turning a
- * misconfiguration into a vault-wide code-generation event. There is no legitimate
- * "tangle everything" setting, so the empty list means "tangle nothing".
+ * FAILS CLOSED on an empty predicate. "No conditions" reads naturally as "no
+ * constraints", which would mean EVERY note tangles — turning a misconfiguration into a
+ * vault-wide code-generation event. There is no legitimate "tangle everything" setting,
+ * so an empty predicate means "tangle nothing".
  */
-export function matchesConditions(conditions: TangleCondition[], facts: NoteFacts): boolean {
-	if (!conditions || conditions.length === 0) return false;
-	return conditions.every((c) => conditionHolds(c, facts));
+export function matchesPredicate(predicate: TanglePredicate | undefined, facts: NoteFacts): boolean {
+	if (!predicate) return false;
+	const tags = (predicate.tags ?? []).map(normalizeTag).filter(Boolean);
+	const properties = (predicate.properties ?? []).filter((c) => c && typeof c === "object");
+	if (tags.length === 0 && properties.length === 0) return false;
+
+	if (tags.length > 0) {
+		const noteTags = facts.tags.map(normalizeTag);
+		if (!tags.some((want) => noteTags.includes(want))) return false;
+	}
+	return properties.every((c) => propertyConditionHolds(c, facts));
 }

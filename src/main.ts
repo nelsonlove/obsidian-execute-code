@@ -2,6 +2,7 @@ import { App, Component, MarkdownRenderer, MarkdownView, Notice, Plugin, TFile, 
 
 import type { ExecutorSettings } from "./settings/Settings";
 import { DEFAULT_SETTINGS } from "./settings/Settings";
+import { migrateTangleSettings } from "./tangle/settings";
 import { SettingsTab } from "./settings/SettingsTab";
 import { applyLatexBodyClasses } from "./transforms/LatexTransformer"
 
@@ -242,8 +243,9 @@ export default class ExecuteCodePlugin extends Plugin {
 		// `tangle` is the one nested settings object, so the shallow merge above would
 		// replace it wholesale — a config saved by an older version would then be missing
 		// every key added since, including the rails' own settings (an absent `marker`
-		// disables the overwrite check). Merge the nested object on its own.
-		this.settings.tangle = Object.assign({}, DEFAULT_SETTINGS.tangle, saved?.tangle);
+		// disables the overwrite check). Migration fills defaults AND converts the legacy
+		// tangle-root shape, so both jobs live in one tested function.
+		this.settings.tangle = migrateTangleSettings(saved?.tangle);
 		if (process.platform !== "win32") {
 			this.settings.wslMode = false;
 		}

@@ -1,14 +1,14 @@
 import { App, Notice, TFile, getAllTags } from "obsidian";
 import * as path from "path";
 import * as fs from "fs";
-import { matchesConditions, NoteFacts } from "./predicate";
+import { matchesPredicate, NoteFacts } from "./predicate";
 import { commentTokenFor, ResolveContext } from "./resolve";
 import { looksGenerated, renderHeader } from "./header";
 import {
-	allowedRoots,
 	planTangle,
 	summarize,
 	TangleReport,
+	sweepRoots,
 	walkFiles,
 	writeArtifact,
 } from "./core";
@@ -39,7 +39,7 @@ export function noteFacts(app: App, note: TFile): NoteFacts {
 }
 
 export function isEligible(app: App, note: TFile, settings: TangleSettings): boolean {
-	return matchesConditions(settings.tangleWhen, noteFacts(app, note));
+	return matchesPredicate(settings.tangleWhen, noteFacts(app, note));
 }
 
 /**
@@ -48,7 +48,7 @@ export function isEligible(app: App, note: TFile, settings: TangleSettings): boo
  */
 export async function tangleNote(app: App, note: TFile, settings: TangleSettings): Promise<TangleReport> {
 	const facts = noteFacts(app, note);
-	if (!matchesConditions(settings.tangleWhen, facts))
+	if (!matchesPredicate(settings.tangleWhen, facts))
 		return { note: note.path, eligible: false, outcomes: [], refused: [], missingRefs: [] };
 
 	const content = await app.vault.cachedRead(note);
@@ -133,9 +133,12 @@ export async function tangleAll(app: App, settings: TangleSettings): Promise<Swe
 		vaultBase: app.vault.adapter.getBasePath(),
 		noteFolder: "",
 	};
-	for (const root of allowedRoots(settings, ctxForRoots)) {
+	for (const root of sweepRoots(ctxForRoots)) {
 		for (const file of walkFiles(root)) {
 			if (written.has(path.resolve(file))) continue;
+			// Markdown is the one kind of file a note legitimately QUOTES the header in
+			// (docs about this feature), and no default artifact is ever .md — skip it.
+			if (file.toLowerCase().endsWith(".md")) continue;
 			try {
 				if (looksGenerated(fs.readFileSync(file, "utf8"), settings.marker)) orphans.push(file);
 			} catch {
