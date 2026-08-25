@@ -16,6 +16,7 @@ import {
 } from "../src/tangle/header.ts";
 import { planTangle, writeArtifact, parseNoteBlocks, parseOrgTangleArg, walkFiles } from "../src/tangle/core.ts";
 import { migrateTangleSettings, DEFAULT_TANGLE_SETTINGS } from "../src/tangle/settings.ts";
+import { extractDocstring, renderDocstring } from "../src/tangle/docstring.ts";
 
 const CTX = { vaultBase: "/vault", noteFolder: "notes/lib", homeDir: "/home/me" };
 const SETTINGS = {
@@ -24,6 +25,7 @@ const SETTINGS = {
 	tangleWhen: { tags: ["tangle"], properties: [] },
 	defaultDestination: "Scripts",
 	allowedOutsideRoots: [],
+	docstringHeading: "Docstring",
 	headerTemplate: DEFAULT_HEADER_TEMPLATE,
 	marker: DEFAULT_MARKER,
 };
@@ -420,6 +422,64 @@ describe("settings migration", () => {
 			allowedOutsideRoots: ["~/x"],
 		};
 		assert.deepEqual(migrateTangleSettings(current), current);
+	});
+});
+
+describe("docstring", () => {
+	const NOTE = [
+		"# Title",
+		"intro text",
+		"## Docstring",
+		"",
+		"Handles the flow.",
+		"",
+		"Never touches records.",
+		"### Detail",
+		"still part of the docstring section",
+		"## Next section",
+		"not docstring",
+		"```js",
+		"code();",
+		"```",
+	].join("\n");
+
+	test("extracts the section under the configured heading, up to a same-or-higher heading", () => {
+		const doc = extractDocstring(NOTE, "Docstring");
+		assert.match(doc, /Handles the flow\./);
+		assert.match(doc, /still part of the docstring section/);
+		assert.doesNotMatch(doc, /not docstring/);
+		assert.doesNotMatch(doc, /intro text/);
+	});
+
+	test("heading match is case-insensitive; absence and blank sections yield undefined", () => {
+		assert.equal(extractDocstring(NOTE, "DOCSTRING"), extractDocstring(NOTE, "Docstring"));
+		assert.equal(extractDocstring(NOTE, "Nope"), undefined);
+		assert.equal(extractDocstring("## Docstring\n\n\n## Next\nx", "Docstring"), undefined);
+		assert.equal(extractDocstring(NOTE, ""), undefined);
+	});
+
+	test("a # line inside a code fence is neither a match nor a terminator", () => {
+		const note = "```sh\n# Docstring\n```\n## Docstring\nreal doc\n```sh\n# not a heading\n```\nmore doc\n## End\n";
+		const doc = extractDocstring(note, "Docstring");
+		assert.match(doc, /real doc/);
+		assert.match(doc, /more doc/);
+		assert.match(doc, /# not a heading/);
+	});
+
+	test("renders one comment token per line, bare token on blanks", () => {
+		assert.equal(renderDocstring("a\n\nb", "//"), "// a\n//\n// b\n");
+		assert.equal(renderDocstring("x", "#"), "# x\n");
+	});
+
+	test("a docstring edit re-tangles: it lives in the compared body, not the header", () => {
+		const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "tangle-doc-"));
+		const dest = path.join(tmp, "doc.js");
+		const header = renderHeader(DEFAULT_HEADER_TEMPLATE, { note: "n.md", date: "2026-01-01", comment: "//" });
+		const body = (doc) => renderDocstring(doc, "//") + "\n" + "code();\n";
+		assert.equal(writeArtifact(dest, header, body("v1 of the doc"), DEFAULT_MARKER).status, "written");
+		assert.equal(writeArtifact(dest, header, body("v1 of the doc"), DEFAULT_MARKER).status, "unchanged");
+		assert.equal(writeArtifact(dest, header, body("v2 of the doc"), DEFAULT_MARKER).status, "written");
+		assert.match(fs.readFileSync(dest, "utf8"), /\/\/ v2 of the doc/);
 	});
 });
 

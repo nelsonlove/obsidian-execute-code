@@ -190,6 +190,23 @@ export default function makeTangleSettings(tab: SettingsTab, containerEl: HTMLEl
 		);
 
 	new Setting(containerEl)
+		.setName("Docstring heading")
+		.setDesc(
+			"If the note has a heading with this text, its section is rendered as a comment block " +
+			"below the generated-file header in every artifact the note tangles. Editing the section " +
+			"re-tangles the files. Empty disables the docstring.",
+		)
+		.addText((text) =>
+			text
+				.setPlaceholder("Docstring")
+				.setValue(settings().docstringHeading)
+				.onChange(async (value) => {
+					settings().docstringHeading = value.trim();
+					await tab.plugin.saveSettings();
+				}),
+		);
+
+	new Setting(containerEl)
 		.setName("Generated-file header")
 		.setDesc(
 			"Prepended to every tangled file. Placeholders: {{note}}, {{uid}}, {{date}}, {{comment}} " +

@@ -23,6 +23,11 @@ export interface TangleSettings {
 	 * empty list keeps that door shut. Rail 2 lives on this.
 	 */
 	allowedOutsideRoots: string[];
+	/**
+	 * Heading whose section renders as a comment-block docstring below the header, in
+	 * every artifact the note tangles. Empty disables the docstring entirely.
+	 */
+	docstringHeading: string;
 	/** Prepended to every artifact. `{{note}}`, `{{uid}}`, `{{date}}`, `{{comment}}`. */
 	headerTemplate: string;
 	/** The stable literal rail 1 looks for. Changing it strands existing artifacts (safely). */
@@ -37,6 +42,7 @@ export const DEFAULT_TANGLE_SETTINGS: TangleSettings = {
 	// out of the box. Eligibility is still opt-in per note via the tag above.
 	defaultDestination: "./generated",
 	allowedOutsideRoots: [],
+	docstringHeading: "Docstring",
 	headerTemplate: DEFAULT_HEADER_TEMPLATE,
 	marker: DEFAULT_MARKER,
 };
@@ -114,6 +120,7 @@ export function migrateTangleSettings(saved: unknown): TangleSettings {
 
 	if (typeof raw.autoTangle === "boolean") out.autoTangle = raw.autoTangle;
 	if (typeof raw.tangleDebounceMs === "number") out.tangleDebounceMs = raw.tangleDebounceMs;
+	if (typeof raw.docstringHeading === "string") out.docstringHeading = raw.docstringHeading;
 	if (typeof raw.headerTemplate === "string") out.headerTemplate = raw.headerTemplate;
 	if (typeof raw.marker === "string") out.marker = raw.marker;
 
