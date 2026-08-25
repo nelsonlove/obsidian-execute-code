@@ -7,6 +7,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## Fork releases (nelsonlove/obsidian-execute-code)
 
+## [2.1.19] - 2026-08-25 (fork)
+### Added
+- Docstrings in tangled artifacts: a new "Docstring heading" setting (default `Docstring`) names a heading whose section is rendered as a comment block below the generated-file header in every artifact the note tangles. The docstring counts as content, so editing it re-tangles the files. Empty setting disables it.
+
 ## [2.1.18] - 2026-08-25 (fork)
 
 Tangling destinations are now anchored to the vault root, and the eligibility settings got a structured UI. (The tangle machinery itself — automatic tag-driven tangling with safety rails — landed unversioned after 2.1.17; this release reshapes its settings.)

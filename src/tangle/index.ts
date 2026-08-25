@@ -4,6 +4,7 @@ import * as fs from "fs";
 import { matchesPredicate, NoteFacts } from "./predicate";
 import { commentTokenFor, ResolveContext } from "./resolve";
 import { looksGenerated, renderHeader } from "./header";
+import { extractDocstring, renderDocstring } from "./docstring";
 import {
 	planTangle,
 	summarize,
@@ -61,14 +62,21 @@ export async function tangleNote(app: App, note: TFile, settings: TangleSettings
 
 	const date = new Date().toISOString();
 	const uid = typeof facts.frontmatter.uid === "string" ? facts.frontmatter.uid : undefined;
+	const docstring = settings.docstringHeading?.trim()
+		? extractDocstring(content, settings.docstringHeading)
+		: undefined;
 	const outcomes = plan.artifacts.map((a) => {
+		const comment = commentTokenFor(a.language);
 		const header = renderHeader(settings.headerTemplate, {
 			note: note.path,
 			uid,
 			date,
-			comment: commentTokenFor(a.language),
+			comment,
 		});
-		return writeArtifact(a.destination, header, a.chunks.join("\n"), settings.marker);
+		// The docstring joins the BODY, not the header — see docstring.ts for why that
+		// placement is what makes a docstring edit re-tangle the file.
+		const body = (docstring ? renderDocstring(docstring, comment) + "\n" : "") + a.chunks.join("\n");
+		return writeArtifact(a.destination, header, body, settings.marker);
 	});
 
 	return { note: note.path, eligible: true, outcomes, refused: plan.refused, missingRefs: plan.missingRefs };
