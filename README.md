@@ -798,14 +798,16 @@ A line consisting only of `<<label>>` is replaced by the code of the block label
 ```
 `````
 
-Blocks with a `tangle` argument can be exported to source files with the **Tangle code blocks in current note** command, with noweb references expanded — org-babel's `org-babel-tangle`. Paths may be absolute, start with `~`, or be relative to the note's folder; blocks sharing a target are concatenated in note order, and target files are overwritten:
+Blocks with a `tangle` argument can be exported to source files with the **Tangle code blocks in current note** command, with noweb references expanded — org-babel's `org-babel-tangle`. Bare paths are relative to the vault root; `./path` is relative to the note's folder; `~/path` and absolute paths point outside the vault and are refused unless the folder is listed under "Allowed folders outside the vault" in settings. Blocks sharing a target are concatenated in note order, and target files are overwritten (only ever files this plugin generated — hand-written files are refused). Blocks without a `tangle` argument land in the configured default destination folder, named after the note. The org-babel spelling `:tangle` on the fence line works too:
 
 `````
-```lisp {tangle="~/scripts/greet.lisp"}
+```lisp :tangle ./scripts/greet.lisp
 <<greeting>>
 (greet "tangle")
 ```
 `````
+
+Which notes tangle at all is controlled by the "Tangle when" settings: a note qualifies when it carries at least one of the listed tags and satisfies every property condition (operators: equals, contains, starts with, ends with, exists, and their negations).
 
 For tangling, labels are shared across the whole note regardless of language; for running, references resolve against labelled blocks of the same language.
 
